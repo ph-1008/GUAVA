@@ -1,0 +1,1041 @@
+\documentclass[class=NCU_thesis, crop=false]{standalone}
+\providecommand{\metricmark}[1]{\textcolor{red}{\textbf{#1}}}
+\begin{document}
+
+\chapter{實驗設計與結果}
+
+本章說明本研究之實驗設計、系統展示與評估結果。
+本研究之目標並非僅驗證單一模型之準確率，而是從系統整合、動作資料處理與使用者觀感三個層面，評估中文輸入經由手語翻譯、詞彙動作檢索、動作參數串接與 GUAVA 虛擬人渲染後，是否能形成可觀看且具連續性的虛擬人手語動畫。
+因此，本章先呈現系統執行環境與操作介面，以及中文至 gloss sequence 的輸出範例；接著分析詞彙動作資料檢索與區間擷取結果，並以 motion envelope 雙閾值敏感度及左右手個別比較實驗檢視區間判定特性，再展示詞彙間過渡幀之生成結果。其後，分別評估詞彙層級動作平滑與 EHM-Tracker 最佳化步數，最後呈現完整動畫生成案例，以及使用者問卷之量化結果與開放式回覆分析。
+
+\section{實驗環境與系統介面}
+\label{sec:exp_environment_ui}
+
+\subsection{硬體與執行環境}
+
+本研究之系統包含中文至 gloss sequence 轉換、手語動作資料檢索、EHM-Tracker 追蹤資料處理、動作參數串接與 GUAVA avatar rendering 等流程。
+其中，手語影片前處理與 GUAVA 渲染涉及深度學習模型與三維人體參數計算，因此需於具備 GPU 之環境執行。
+本研究實驗環境整理如表~\ref{tab:experiment_environment} 所示。
+
+\begin{table}[H]
+\centering
+\caption{實驗硬體與軟體環境}
+\label{tab:experiment_environment}
+\begin{tabular}{ll}
+\toprule
+項目 & 規格 \\
+\midrule
+作業系統 & Ubuntu 22.04.5 LTS \\
+GPU & NVIDIA RTX A6000 (48 GB VRAM) \\
+CPU & Intel Xeon w5-3425 (12 Cores / 24 Threads) \\
+系統記憶體 & 64 GB RAM \\
+主要程式語言 & Python \\
+主要模組 & SLT 模組、EHM-Tracker、GUAVA avatar rendering \\
+輸入資料 & 中文文本、手語詞彙影片、GUAVA source avatar data \\
+輸出資料 & gloss sequence、串接後追蹤資料、虛擬人手語動畫 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{系統操作介面}
+
+為使中文至虛擬人手語動畫生成流程更易於操作與觀察，本研究建置圖形化介面以整合文字輸入、gloss sequence 顯示、動作資料檢索狀態、動作串接資訊與動畫渲染結果。
+如圖~\ref{fig:system_ui_interface}(a) 所示，系統介面呈現操作介面總覽，主要分為人物形象來源選擇、自然語言輸入、生成狀態顯示與影片播放區；圖~\ref{fig:system_ui_interface}(b) 則呈現動畫生成完成後之影片播放與輸出結果顯示區。
+使用者可由系統提供之人物圖庫中選擇虛擬角色外觀，亦可透過上傳欄位自行提供真實人物照片。
+若使用者選擇圖庫人物，系統會直接載入已完成 EHM-Tracker 追蹤之角色來源資料；若使用者上傳照片，系統會先執行第~\ref{sec:source_avatar_tracking} 節所述之單張影像追蹤流程，再將追蹤結果作為 GUAVA source data。
+接著，使用者於介面輸入中文句子後，系統會依序執行手語翻譯、詞彙資料查詢、追蹤參數載入、motion envelope 分析、動作平滑串接與 GUAVA 渲染。
+系統會顯示渲染完成影片與輸出儲存位置，並於下方列出手語轉換結果之單詞影片，便於檢查最終句子動畫與各 gloss 對應片段之關係。
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.95\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{ch4/ui/system_ui_overview.png}
+        \caption{操作介面總覽}
+        \label{fig:system_ui_overview}
+    \end{subfigure}
+
+    \vspace{0.6em}
+
+    \begin{subfigure}[b]{0.95\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{ch4/ui/system_ui_video_area.png}
+        \caption{影片播放與輸出結果顯示區}
+        \label{fig:system_ui_video_area}
+    \end{subfigure}
+
+    \caption{中文至虛擬人手語動畫生成系統之操作介面與輸出結果顯示。(a) 系統操作介面總覽，包含人物形象來源選擇、自然語言輸入、生成狀態顯示與影片播放區；(b) 動畫生成完成後之影片播放與輸出結果顯示區，可呈現 GUAVA 渲染完成之虛擬人手語動畫、輸出檔案位置，以及手語轉換結果之單詞影片。}
+    \label{fig:system_ui_interface}
+\end{figure}
+
+\section{中文至 Gloss Sequence 輸出範例}
+\label{sec:exp_slt_examples}
+
+本節展示 SLT 模組在實際系統中的輸出結果。
+如第~\ref{sec:system_integration_flow} 節所述，gloss sequence 為語言層級與動作層級之間的中介表示；因此，SLT 輸出是否能正確反映台灣自然手語語序，會直接影響後續詞彙動作資料的查詢與動畫生成。
+表~\ref{tab:slt_output_examples} 列出部分中文輸入與系統輸出之 gloss sequence 範例。
+後續章節介紹之使用者問卷共提供 25 支系統串接影片，其中文輸入與系統輸出 gloss 則整理於附件一。
+
+\begin{table}[H]
+\centering
+\caption{中文輸入與 SLT 模組輸出 gloss sequence 範例}
+\label{tab:slt_output_examples}
+\begin{tabular}{ll}
+\toprule
+中文輸入 & gloss sequence \\
+\midrule
+我今天去看醫生 & 我/今天/醫生/看/。 \\
+今天在哪裡上課 & 今天/哪裡/上課/\textcolor{gray}{疑問表情} \\
+上課不能吃東西 & 上課/吃/不能/。 \\
+弟弟不喜歡吃番茄 & 弟弟/吃/番茄/不喜歡/。 \\
+我喜歡吃牛奶冰淇淋 & 我/吃/牛奶/冰淇淋/喜歡/。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+以「弟弟不喜歡吃番茄」為例，SLT 模組輸出之 gloss sequence 為「弟弟/吃/番茄/不喜歡/。」。
+後續動畫生成流程會排除標點符號，並依序查詢「弟弟」、「吃」、「番茄」與「不喜歡」四個 gloss 所對應之已追蹤手語動作資料。
+圖~\ref{fig:slt_output_ui_example} 進一步展示此範例於整體系統介面中的呈現方式。
+介面左側顯示使用者所選擇之虛擬角色形象來源，右側依序呈現自然語言輸入、生成狀態、模型輸入、模型輸出與手語轉換結果；
+下方則顯示 GUAVA 渲染完成之虛擬人手語動畫，以及各 gloss 對應之原始單詞影片，便於對照中文輸入、gloss sequence 與最終動畫結果之間的關係。
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{ch4/slt/gloss_output_example.png}
+    \caption{中文輸入「弟弟不喜歡吃番茄」於整體系統介面中之輸出範例。介面呈現人物形象來源、自然語言輸入、SLT 模組之模型輸入與模型輸出、手語轉換結果、GUAVA 渲染完成影片，以及「弟弟」、「吃」、「番茄」、「不喜歡」等 gloss 對應之單詞影片。}
+    \label{fig:slt_output_ui_example}
+\end{figure}
+
+\section{詞彙動作區間分析與過渡幀生成}
+\label{sec:exp_motion_retrieval}
+
+本節針對詞彙動作資料進入串接流程後的處理結果進行分析。
+首先說明 gloss 對應之動作資料檢索與有效區間擷取結果；其次透過雙閾值敏感度分析，觀察高、低閾值係數對擷取邊界的影響，並比較左右手個別及加總 motion envelope 的區間判定差異；最後以兩組相鄰詞彙展示參數插值所生成的過渡幀。
+
+\subsection{詞彙動作資料檢索與區間擷取結果}
+
+在取得 gloss sequence 後，系統會根據 \texttt{merged\_labels\_tracked.json} 查詢每一個 gloss 是否具有對應之已追蹤手語動作資料。
+若詞彙可被成功對應，系統會載入其 \texttt{optim\_tracking\_ehm.pkl}、\texttt{id\_share\_params.pkl}、\texttt{videos\_info.json} 與 \texttt{img\_lmdb} 等資料，作為後續動作串接與虛擬人渲染之輸入。
+表~\ref{tab:retrieval_example} 以「弟弟不喜歡吃番茄」為例，說明 gloss sequence 中各詞彙之動作資料檢索結果。
+
+\begin{table}[H]
+\centering
+\caption{gloss sequence 之手語動作資料檢索範例}
+\label{tab:retrieval_example}
+\begin{tabular}{llll}
+\toprule
+順序 & gloss & 動作資料狀態 & 後續處理 \\
+\midrule
+1 & 弟弟 & 已找到對應追蹤資料 & 句首片段，保留起始區間 \\
+2 & 吃 & 已找到對應追蹤資料 & 句中片段，依 motion envelope 裁切 \\
+3 & 番茄 & 已找到對應追蹤資料 & 句中片段，依 motion envelope 裁切 \\
+4 & 不喜歡 & 已找到對應追蹤資料 & 句尾片段，保留結尾區間 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+為減少原始詞彙影片前後靜止段對串接結果的影響，本研究使用第~\ref{sec:motion_concatenation} 節所述之 motion envelope 分析手部速度變化，並估計每個詞彙之有效動作區間。
+如圖~\ref{fig:motion_envelope_example}(c) 所示，以「番茄」一詞的 motion envelope 圖為例，系統判定之有效動作擷取範圍為 $[5,58)$。
+因此，圖~\ref{fig:frame_extraction_example} 中「番茄」單詞影片的逐幀截圖，僅取藍框標示之幀作為後續動作串接輸入；未被藍框標示的前後幀則主要屬於準備姿勢、停頓或收尾姿勢。
+此詞彙的動作內容為一手五指彎曲，重複在另一手上手臂上下來回擦拭。
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{ch4/motion/tomato_frame_extraction_example.png}
+    \caption{「番茄」單詞影片之有效動作區間擷取範例。藍框表示依據圖~\ref{fig:motion_envelope_example}(c) 之 motion envelope 分析結果所保留的範圍 $[5,58)$，作為後續動作串接使用之有效動作區間。}
+    \label{fig:frame_extraction_example}
+\end{figure}
+
+另一範例如圖~\ref{fig:motion_envelope_jintian_nali_shangke}(b) 所示，以「哪裡」一詞的 motion envelope 圖為例，系統判定之有效動作擷取範圍為 $[26,85)$。
+因此，圖~\ref{fig:where_frame_extraction_example} 中「哪裡」單詞影片的逐幀截圖，僅取藍框標示之幀作為後續動作串接輸入。
+此詞彙之動作可視為由「什麼」與「地方」兩個語意動作組合而成：前段為一手食指向上伸直，並在身體前左右晃動；後段為一手五指彎曲往下放。
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{ch4/motion/where_frame_extraction_example.png}
+    \caption{「哪裡」單詞影片之有效動作區間擷取範例。藍框表示依據圖~\ref{fig:motion_envelope_jintian_nali_shangke}(b) 之 motion envelope 分析結果所保留的範圍 $[26,85)$，作為後續動作串接使用之有效動作區間。}
+    \label{fig:where_frame_extraction_example}
+\end{figure}
+
+\subsection{Motion Envelope 雙閾值敏感度分析}
+\label{sec:exp_motion_threshold_sensitivity}
+
+第~\ref{sec:motion_concatenation} 節之 motion envelope 方法使用高、低雙閾值判定詞彙的主要動作區域。
+高閾值用於啟動候選動作區域，低閾值則用於將候選區域向前與向後延伸至較低速的動作邊界。
+為觀察閾值係數對擷取範圍的影響，本研究進行參數敏感度分析，將高、低閾值一般化表示為：
+
+\begin{equation}
+    \tau_{\mathrm{high}}
+    =
+    \operatorname{median}(\tilde{v})
+    +
+    k_{\mathrm{high}}\operatorname{MAD}(\tilde{v}),
+    \quad
+    \tau_{\mathrm{low}}
+    =
+    \operatorname{median}(\tilde{v})
+    +
+    k_{\mathrm{low}}\operatorname{MAD}(\tilde{v}),
+    \label{eq:motion_threshold_sensitivity}
+\end{equation}
+
+其中，$\tilde{v}$ 為平滑後之左右手腕加總速度，$k_{\mathrm{high}}$ 與 $k_{\mathrm{low}}$ 分別為高、低閾值係數。
+本實驗選用「弟弟/吃/番茄/不喜歡」與「今天/哪裡/上課」兩組 gloss sequence，共 7 個詞彙作為分析樣本。
+高閾值係數分別設定為 0.8、1.0、1.2、1.5 與 2.0；低閾值係數分別設定為 -0.5、-0.35、0、0.2、0.35、0.5 與 0.8。
+其中，$k_{\mathrm{high}}=0.8$ 且 $k_{\mathrm{low}}=0.8$ 時不符合低閾值應小於高閾值之條件，故不納入有效組合，其餘共形成 34 組有效設定。
+目前正式串接流程採用 $k_{\mathrm{high}}=1.2$ 與 $k_{\mathrm{low}}=0.35$。
+
+為單獨比較閾值係數的影響，其餘參數均維持一致，包括 \texttt{window\_size}=5、峰值間最小距離 \texttt{min\_peak\_distance}=10、候選區段最大合併間隔 $\max(\texttt{min\_peak\_distance},10)=10$ 幀，以及邊界縮減量 \texttt{offset\_frames}=5。
+其中，\texttt{min\_peak\_distance} 用於限制輔助峰值偵測時相鄰峰值的最小距離；候選區段最大合併間隔則用於決定兩個動作區段是否合併，兩者用途不同，但在本實驗中的數值皆為 10 幀。
+最終擷取範圍另受最短片段限制影響，其保留長度至少為 18 幀或原始片段幀數之 45\% 中較大者。
+本實驗忽略 7 個詞彙原本位於句首或句尾的位置，全部視為句中詞，分別計算明確的起始幀與結束幀。
+高低閾值完成區段擴張、過濾與合併後的最外側範圍稱為「\textbf{閾值偵測範圍}」；再套用邊界縮減與最短片段限制後的範圍，則稱為「\textbf{最終擷取範圍}」。
+若第 $i$ 個詞彙之閾值偵測範圍與最終擷取範圍分別為 $[s_i^{\mathrm{raw}},e_i^{\mathrm{raw}})$ 與 $[s_i^{\mathrm{final}},e_i^{\mathrm{final}})$，原始總幀數為 $N_i$，兩種保留比例分別定義為：
+
+\begin{equation}
+    r_i^{\mathrm{raw}}
+    =
+    \frac{e_i^{\mathrm{raw}}-s_i^{\mathrm{raw}}}{N_i},
+    \quad
+    r_i^{\mathrm{final}}
+    =
+    \frac{e_i^{\mathrm{final}}-s_i^{\mathrm{final}}}{N_i}.
+    \label{eq:motion_threshold_retained_ratio}
+\end{equation}
+
+圖表所列之平均保留比例為七個詞彙保留比例的算術平均。
+除平均保留比例外，本研究亦以目前設定 1.2/0.35 所得之閾值偵測範圍為基準，令 $\Delta s_i=s_i^{\mathrm{raw}}-s_{i,\mathrm{current}}^{\mathrm{raw}}$、$\Delta e_i=e_i^{\mathrm{raw}}-e_{i,\mathrm{current}}^{\mathrm{raw}}$，計算各組設定在七個詞彙上的邊界差異。
+熱圖呈現帶方向的平均位移，表格則呈現平均絕對差 $\operatorname{mean}(|\Delta s_i|)$ 與 $\operatorname{mean}(|\Delta e_i|)$。
+此處之差異僅用於表示參數改變後的邊界敏感程度，並非相對於人工標註的偵測誤差。
+
+圖~\ref{fig:motion_threshold_sensitivity_heatmaps} 顯示 34 組有效閾值設定之跨詞彙平均結果。
+橫軸為高閾值係數，縱軸為低閾值係數，每一格為該組設定在七個詞彙上的平均值，紅框則標示目前設定 1.2/0.35。
+圖~\ref{fig:motion_threshold_sensitivity_heatmaps}(a) 與 (b) 分別表示平均閾值範圍保留比例與平均最終擷取保留比例；顏色越接近黃色代表平均保留比例越高，越接近藍紫色則代表保留比例越低。
+圖~\ref{fig:motion_threshold_sensitivity_heatmaps}(c) 與 (d) 使用帶方向的邊界位移；起點負值表示比目前設定提早，起點正值表示延後，終點正值表示比目前設定更晚結束，終點負值則表示更早結束。
+白色且標示破折號的格子為不符合低閾值小於高閾值條件之無效組合。
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.98\textwidth]{ch4/motion/motion_threshold_sensitivity_heatmaps.png}
+    \caption{Motion envelope 高低閾值係數敏感度分析。橫軸與縱軸分別為高、低閾值係數；(a) 為平均閾值範圍保留比例；(b) 為七個詞皆視為句中詞時的平均最終擷取保留比例；(c) 與 (d) 分別為相對目前設定 1.2/0.35 之平均起點與終點位移。紅框表示目前設定。}
+    \label{fig:motion_threshold_sensitivity_heatmaps}
+\end{figure}
+
+表~\ref{tab:motion_threshold_sensitivity_result} 整理不同係數設定的量化結果。
+若多個高閾值係數在七個詞彙上得到完全相同的逐詞起訖範圍，則合併於同一列，並將各個係數值逐一列出。
+表中平均起點差與平均終點差採絕對值計算，數值越小代表結果越接近目前設定，但不表示其動作邊界一定較準確。
+
+\begin{table}[H]
+\centering
+\caption{不同高低閾值係數之平均擷取範圍比較}
+\label{tab:motion_threshold_sensitivity_result}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llrrrr}
+\toprule
+$k_{\mathrm{high}}$ & $k_{\mathrm{low}}$ & 平均閾值範圍保留比例 & 平均最終擷取比例 & 平均起點差（幀） & 平均終點差（幀） \\
+\midrule
+0.8、1.0、1.2、1.5、2.0 & -0.50 & 66.0\% & 54.4\% & 1.6 & 7.4 \\
+0.8、1.0、1.2、1.5、2.0 & -0.35 & 63.7\% & 52.4\% & 0.9 & 5.9 \\
+0.8                         &  0.00 & 61.2\% & 50.5\% & 0.3 & 3.9 \\
+1.0、1.2、1.5、2.0          &  0.00 & 58.4\% & 50.5\% & 0.3 & 1.1 \\
+0.8                         &  0.20 & 60.1\% & 49.9\% & 0.0 & 3.0 \\
+1.0、1.2、1.5、2.0          &  0.20 & 57.4\% & 49.9\% & 0.0 & 0.4 \\
+0.8                         &  0.35 & 59.8\% & 49.6\% & 0.0 & 2.7 \\
+1.0、\textbf{1.2}、1.5、2.0 & \textbf{0.35} & \textbf{57.0\%} & \textbf{49.6\%} & \textbf{0.0} & \textbf{0.0} \\
+0.8                         &  0.50 & 59.1\% & 49.2\% & 0.0 & 3.1 \\
+1.0、1.2                     &  0.50 & 56.4\% & 49.2\% & 0.0 & 0.6 \\
+1.5、2.0                     &  0.50 & 55.4\% & 49.2\% & 0.0 & 1.6 \\
+1.0、1.2                     &  0.80 & 54.8\% & 48.1\% & 0.9 & 1.4 \\
+1.5、2.0                     &  0.80 & 53.6\% & 48.1\% & 0.9 & 2.6 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+由低閾值方向觀察可知，降低 $k_{\mathrm{low}}$ 會使已由高閾值確認的候選區段向兩側延伸更遠。
+當固定 $k_{\mathrm{high}}=1.2$，並將 $k_{\mathrm{low}}$ 由目前的 0.35 改為 -0.35 時，七個詞彙的平均閾值範圍保留比例由 57.0\% 增加至 63.7\%，起點平均提前 0.9 幀，終點平均延後 5.9 幀。
+低閾值雖低於高閾值，但不必低於速度中位數；若使用 median 減去 MAD，閾值可能接近靜止期間的姿態追蹤波動，使候選區段跨越低速停頓並向影片兩端延伸。
+因此，本研究使用 median 加上較小比例之 MAD 作為低閾值，使其低於主要動作啟動門檻，同時維持在典型速度基準之上。
+
+由高閾值方向觀察，在固定 $k_{\mathrm{low}}=0.35$ 時，$k_{\mathrm{high}}$ 分別設定為 1.0、1.2、1.5 與 2.0，七個詞彙皆得到相同的閾值偵測範圍。
+當 $k_{\mathrm{high}}$ 降至 0.8 時，部分較低速的區域亦會被啟動；其中「今天」之閾值偵測範圍由目前設定的 $[17,46)$ 擴張為 $[17,65)$。
+圖~\ref{fig:motion_threshold_today_comparison} 進一步呈現「今天」在代表性高、低閾值設定下之最終擷取結果；七個詞皆視為句中詞後，目前設定 1.2/0.35 的最終擷取結果為 $[9,51)$，$k_{\mathrm{high}}=0.8$ 時為 $[19,61)$，而 $k_{\mathrm{low}}=-0.35$ 時則為 $[20,62)$。
+目前設定之閾值偵測範圍 $[17,46)$ 僅有 29 幀，短於「今天」所需的最短片段長度 42 幀，因此最終範圍會以區段中心向兩側擴張為 $[9,51)$；這也說明最終擷取範圍除受閾值影響外，亦會受到最短片段限制調整。
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.98\textwidth]{ch4/motion/motion_threshold_today_range_comparison.png}
+    \caption{「今天」在不同高低閾值係數下之 motion envelope 與最終擷取範圍比較。上下圖使用相同幀座標，以對照速度變化與擷取邊界。本實驗將其視為句中詞，不套用句首保留開頭規則；降低 $k_{\mathrm{high}}$ 可能啟動額外速度區域，使用負 $k_{\mathrm{low}}$ 則使候選區域向較低速位置延伸。}
+    \label{fig:motion_threshold_today_comparison}
+\end{figure}
+
+綜合上述結果，$k_{\mathrm{high}}$ 分別為 1.0、1.2、1.5，搭配 $k_{\mathrm{low}}$ 分別為 0.2、0.35、0.5 時，在本實驗七個詞彙上呈現相對穩定的擷取結果。
+目前採用的 1.2/0.35 位於此穩定區域內，可作為兼顧主要動作啟動與邊界延伸的操作設定。
+然而，本實驗未使用人工標註之正確動作起訖幀，故結果僅能說明係數改變造成的擷取範圍差異與參數敏感程度，不能據此宣稱目前設定具有最高的動作區間偵測準確率。
+
+\subsection{單、雙手詞彙之左右手 Motion Envelope 比較}
+\label{sec:exp_individual_hand_motion_envelope}
+
+本研究原始方法將左右手腕之相鄰幀位移量相加，作為整體手部動作強度。
+然而，對於主要由單手完成的詞彙，非主要手的自然伴隨動作或姿態估計之小幅變化亦會被納入加總結果，可能影響有效動作區間之判定；相對地，若對雙手詞彙僅分析其中一手，則可能忽略另一手所承載的動作資訊。
+因此，本研究進一步比較左手、右手及左右手加總之 motion envelope，以觀察左右手個別分析對單手與雙手詞彙之適用情形。
+
+本實驗分別計算左手速度 $v_t^L$、右手速度 $v_t^R$ 與原方法之加總速度 $v_t^{\Sigma}$：
+
+\begin{equation}
+    v_t^L = \left\| \mathbf{l}_{t+1} - \mathbf{l}_t \right\|_2,
+    \quad
+    v_t^R = \left\| \mathbf{r}_{t+1} - \mathbf{r}_t \right\|_2,
+    \quad
+    v_t^{\Sigma} = v_t^L + v_t^R.
+    \label{eq:individual_hand_motion_envelope}
+\end{equation}
+
+三組速度序列均採用第~\ref{sec:motion_concatenation} 節所述之相同處理流程，包含時間平滑、以 median 與 MAD 建立高低雙閾值、候選區段擴張與過濾、相鄰區段合併、邊界縮減及最短片段限制。
+實驗固定 $k_{\mathrm{high}}=1.2$、$k_{\mathrm{low}}=0.35$、\texttt{window\_size}=5、\texttt{min\_peak\_distance}=10、候選區段最大合併間隔 10 幀，以及 \texttt{offset\_frames}=5，並將所有樣本視為句中詞，以排除句首與句尾保留規則的影響。
+實驗樣本包含兩個單手詞彙「吃」與「哪裡」，以及兩個雙手詞彙「今天」與「上課」。
+此處的單手或雙手類別係依詞彙主要動作型態區分；為避免各圖自動縮放縱軸而造成振幅近似的視覺誤判，同一詞彙之左手、右手與加總曲線皆使用相同的縱軸範圍。
+圖中黑線、橘線與藍線分別表示平滑後之左手速度 $\tilde{v}_t^L$、右手速度 $\tilde{v}_t^R$ 與加總速度 $\tilde{v}_t^{\Sigma}$；高、低閾值及淡綠色有效區間則依原加總方法之分析結果標示。
+
+為量化左右手對整體動作的相對貢獻，本實驗將平滑後速度於時間軸上的總和稱為動作能量，並計算左右手能量占比：
+
+\begin{equation}
+    \rho_L =
+    \frac{\sum_t \tilde{v}_t^L}{\sum_t \tilde{v}_t^{\Sigma}},
+    \quad
+    \rho_R =
+    \frac{\sum_t \tilde{v}_t^R}{\sum_t \tilde{v}_t^{\Sigma}}.
+    \label{eq:individual_hand_energy_ratio}
+\end{equation}
+
+圖~\ref{fig:single_hand_motion_envelope_comparison} 顯示兩個單手詞彙之比較結果。
+「吃」與「哪裡」皆呈現右手速度曲線明顯高於左手之現象，顯示右手為兩段動作的主要動作手。
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.95\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{ch4/motion/single_hand_motion_envelope_eat.png}
+        \caption{單手詞彙「吃」}
+        \label{fig:single_hand_motion_envelope_eat}
+    \end{subfigure}
+
+    \vspace{0.6em}
+
+    \begin{subfigure}[b]{0.95\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{ch4/motion/single_hand_motion_envelope_where.png}
+        \caption{單手詞彙「哪裡」}
+        \label{fig:single_hand_motion_envelope_where}
+    \end{subfigure}
+
+    \caption{單手詞彙之左右手個別與加總 motion envelope 比較。黑線、橘線與藍線分別表示左手、右手及左右手加總速度；淡綠色區域表示原加總方法判定之有效動作區間。}
+    \label{fig:single_hand_motion_envelope_comparison}
+\end{figure}
+
+圖~\ref{fig:double_hand_motion_envelope_comparison} 顯示兩個雙手詞彙之比較結果。
+「今天」之左右手曲線在主要動作區間內具有相近的速度峰值與能量占比，因這個詞的左右手動作相似；「上課」雖以右手動作較為明顯，左手仍形成多個可辨識的速度區段，並對加總曲線產生實質貢獻。
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.95\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{ch4/motion/double_hand_motion_envelope_today.png}
+        \caption{雙手詞彙「今天」}
+        \label{fig:double_hand_motion_envelope_today}
+    \end{subfigure}
+
+    \vspace{0.6em}
+
+    \begin{subfigure}[b]{0.95\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{ch4/motion/double_hand_motion_envelope_class.png}
+        \caption{雙手詞彙「上課」}
+        \label{fig:double_hand_motion_envelope_class}
+    \end{subfigure}
+
+    \caption{雙手詞彙之左右手個別與加總 motion envelope 比較。雙手詞彙中兩手皆對整體動作強度產生貢獻，僅分析單一手可能遺漏另一手之動作資訊。}
+    \label{fig:double_hand_motion_envelope_comparison}
+\end{figure}
+
+四個詞彙之平滑後最大速度、動作能量占比與最終擷取範圍整理於表~\ref{tab:individual_hand_motion_envelope_result}。
+表中有效範圍採用程式切片之半開區間 $[s,e)$ 表示，即包含起始幀 $s$，但不包含結束幀 $e$。
+
+\begin{table}[H]
+\centering
+\caption{單、雙手詞彙之左右手個別 motion envelope 比較結果}
+\label{tab:individual_hand_motion_envelope_result}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llrrrrccc}
+\toprule
+類別 & 詞彙 & $\max(\tilde{v}^L)$（pixels/frame） & $\max(\tilde{v}^R)$（pixels/frame） & $\rho_L$ & $\rho_R$ & 左手範圍 & 右手範圍 & 加總範圍 \\
+\midrule
+單手 & 吃   & 4.82  & 43.20 & 14.27\% & 85.73\% & $[23,68)$ & $[21,66)$ & $[22,67)$ \\
+單手 & 哪裡 & 6.97  & 39.82 & 16.23\% & 83.77\% & $[24,90)$ & $[26,83)$ & $[26,85)$ \\
+雙手 & 今天 & 41.15 & 43.77 & 49.14\% & 50.86\% & $[18,60)$ & $[10,52)$ & $[9,51)$ \\
+雙手 & 上課 & 19.63 & 37.97 & 38.25\% & 61.75\% & $[30,80)$ & $[24,80)$ & $[25,80)$ \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+由單手詞彙結果可知，「吃」與「哪裡」之右手動作能量分別占加總能量的 85.73\% 與 83.77\%，而左手僅占 14.27\% 與 16.23\%。
+右手個別分析與原加總方法所得範圍亦相近：「吃」分別為 $[21,66)$ 與 $[22,67)$；「哪裡」則為 $[26,83)$ 與 $[26,85)$，邊界差異約為一至兩幀。
+此結果顯示，個別曲線有助於辨識單手詞彙之主要動作手，但非主要手仍可能因自然伴隨動作或姿態追蹤之小幅變化而形成非零速度。
+由於每一手皆依自身速度分布建立 median 與 MAD 閾值，低振幅的非主要手仍可能產生候選動作區段，因此不能僅因其振幅較低便直接將該手之偵測結果視為雜訊。
+
+雙手詞彙呈現不同情形。「今天」之左右手能量占比分別為 49.14\% 與 50.86\%，兩手貢獻近似；「上課」之右手占比為 61.75\%，但左手仍占 38.25\%。
+若僅使用單一手進行區間判斷，「今天」左右手個別所得起訖範圍相差較大，而「上課」的左手起點亦較右手晚六幀，顯示單一手曲線未必能完整表示雙手詞彙的整體動作時序。
+此外，由於三條曲線各自具有不同的 median、MAD 與最短片段限制，加總方法所得區間並非左右手個別區間的直接聯集，而是依加總速度分布重新判定的結果。
+
+綜合四個詞彙之比較，左右手個別分析可提升 motion envelope 的可解釋性，並呈現主要手與非主要手之相對貢獻；然而，在缺乏人工標註之正確動作起訖幀的情況下，本實驗尚無法證明個別分析能產生更準確的擷取範圍。
+考量原加總方法可使用同一流程處理單手與雙手詞彙，且單手詞彙之加總結果與主要手結果僅有小幅邊界差異，本研究正式串接流程仍保留左右手速度加總方法。
+未來可先依左右手能量占比自動判定主要動作手，再配合人工標註之動作起訖幀，以更多單手及雙手樣本比較加總、主要手或雙手聯集等策略之擷取準確度。
+
+\subsection{過渡幀生成結果展示}
+\label{sec:exp_smoothing_result}
+
+為呈現第~\ref{sec:motion_concatenation} 節所述之過渡幀生成結果，本研究以「弟弟/吃/番茄/不喜歡」與「今天/哪裡/上課」為例，觀察相鄰詞彙片段之間的銜接情形。
+系統在每兩個相鄰詞彙片段之間插入 15 個過渡幀，並依式~\eqref{eq:transition_interpolation} 對前一片段結尾與下一片段起始的動作參數進行插值。
+本小節以連續影格進行質性展示，未另設人工自然度標註或客觀誤差指標，因此結果用於說明系統實際生成的姿態變化，不作為過渡方法優於其他方法的量化證據。
+如圖~\ref{fig:eat_to_tomato_transition_frames} 所示，此圖展示句中由「吃」轉變為「番茄」時，系統使用插值方法生成之過渡幀。
+在圖~\ref{fig:motion_envelope_example} 中，「吃」與「番茄」分別對應子圖 (b) 與子圖 (c)；完成有效動作區間擷取後，系統於兩個片段之間加入 frame 134 至 148，共 15 個過渡幀，使前一詞彙的收尾姿態逐步銜接至後一詞彙的起始姿態。圖中另將「番茄」的第一個內容幀 frame 149 納入藍框，以呈現過渡結束後的實際銜接位置。
+
+若直接串接，前一詞「吃」的收尾階段中手部逐漸放下，而後一詞「番茄」的開頭階段則是將手舉起的準備動作，兩者之間容易產生額外的手部舉起與放下畫面。
+當一句話由多個 gloss 組成時，此類準備與收尾動作會在詞彙交界處反覆出現，使整體動畫顯得不連續。
+透過插值產生過渡幀後，手部位置可由前一詞彙的收尾姿態逐步銜接至下一詞彙的準備姿態，使視覺上較為連貫。
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{ch4/motion/eat_to_tomato_transition_frames.png}
+    \caption{「吃」至「番茄」之過渡幀生成結果展示。frame 134 至 148 為系統以插值方法生成的 15 個過渡幀，frame 149 為「番茄」的第一個內容幀；藍框將兩者一併標示，以呈現過渡幀與後一詞彙起始姿態的銜接。}
+    \label{fig:eat_to_tomato_transition_frames}
+\end{figure}
+
+另一範例如圖~\ref{fig:today_to_where_transition_frames} 所示，此圖展示「今天/哪裡/上課」中由「今天」轉變為「哪裡」時，系統使用插值方法生成之過渡幀。
+在圖~\ref{fig:motion_envelope_jintian_nali_shangke} 中，「今天」與「哪裡」分別對應子圖 (a) 與子圖 (b)；完成有效動作區間擷取後，系統於兩個片段之間加入 frame 52 至 66 的過渡幀，使「今天」的收尾姿態逐步銜接至「哪裡」的起始準備姿態。
+
+若直接串接，「今天」片段結尾的雙手位置與「哪裡」片段中食指舉起並左右晃動的準備姿態差異較大，容易在詞彙交界處形成突兀的手部移動。
+加入過渡幀後，手部可逐步由前一詞彙姿態移向下一詞彙的準備位置，使整句動作在視覺上更加連續。
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{ch4/motion/today_to_where_transition_frames.png}
+    \caption{「今天」至「哪裡」之過渡幀生成結果展示。藍框表示系統於兩個詞彙片段之間以插值方法生成之 frame 52 至 66 過渡幀，用以銜接「今天」的收尾姿態與「哪裡」的起始準備姿態。}
+    \label{fig:today_to_where_transition_frames}
+\end{figure}
+
+\section{詞彙層級動作平滑實驗}
+\label{sec:exp_word_smoothing}
+
+由於原始詞彙影片經 EHM-Tracker 追蹤後，部分片段在手部或身體參數上仍可能出現高頻抖動，本研究於系統介面中加入詞彙片段平滑功能。
+此功能會直接作用於單詞片段之動作參數，包含 SMPL-X 身體姿態參數、MANO 手部姿態參數與臉部表情相關參數，使相鄰影格之參數變化更連續，再進行 GUAVA avatar rendering。
+因此，本實驗目的並非證明平滑後之參數一定更接近原始影像觀測，而是量化此後處理方法對動作抖動的抑制效果，並檢查平滑後是否仍大致維持原本的手語動作軌跡。
+
+\subsection{實驗設定}
+
+本實驗使用單手與雙手詞彙各 5 個樣本，共 10 個樣本作為評估資料。
+單手與雙手樣本皆包含平滑前與平滑後兩組追蹤結果，用以比較詞彙片段平滑功能對同一段動作參數的影響。
+所有樣本皆比較平滑前與平滑後之同一段追蹤參數，並以兩者共同存在的影格數進行逐幀對齊。
+
+\subsection{計算方法}
+
+令第 $t$ 幀的動作參數向量為 $\mathbf{p}_{t}$，其中 $\mathbf{p}_{t}$ 可分別代表 SMPL-X body pose、MANO hand pose，或將多個姿態參數串接後的 all pose。
+本研究先計算三階時間差分作為 jerk，以描述動作變化是否突然；此類 jerk-based smoothness 指標與人體動作控制中的 minimum-jerk model 相關，常用於描述動作軌跡是否平順 \cite{flash1985coordination,balasubramanian2015smoothness}：
+
+\begin{equation}
+    \mathbf{j}_{t}
+    =
+    \mathbf{p}_{t}
+    - 3\mathbf{p}_{t-1}
+    + 3\mathbf{p}_{t-2}
+    - \mathbf{p}_{t-3}.
+    \label{eq:word_smoothing_jerk}
+\end{equation}
+
+接著計算平均 jerk：
+
+\begin{equation}
+    J_{\mathrm{mean}}
+    =
+    \frac{1}{T-3}
+    \sum_{t=4}^{T}
+    \left\|
+    \mathbf{j}_{t}
+    \right\|_{2}.
+    \label{eq:word_smoothing_mean_jerk}
+\end{equation}
+
+平均 jerk 越小，代表相鄰影格之間較少出現突然加速或突然轉向，視覺上通常會呈現較少抖動。
+然而，不同詞彙的影格長度與動作幅度不同，僅比較平均 jerk 可能受到片段長短與動作大小影響。
+因此，本研究另計算 normalized jerk cost，使不同長度與不同動作幅度之片段具有較可比較的平滑度尺度 \cite{balasubramanian2015smoothness}：
+
+\begin{equation}
+    J_{\mathrm{norm}}
+    =
+    \frac{T^{5}}{L^{2}}
+    \sum_{t=4}^{T}
+    \left\|
+    \mathbf{j}_{t}
+    \right\|_{2}^{2},
+    \quad
+    L =
+    \sum_{t=2}^{T}
+    \left\|
+    \mathbf{p}_{t}
+    -
+    \mathbf{p}_{t-1}
+    \right\|_{2}.
+    \label{eq:word_smoothing_normalized_jerk}
+\end{equation}
+
+其中 $T$ 為片段影格數，$L$ 為該參數序列的總路徑長度。
+Normalized jerk cost 會將 jerk 能量依片段長度與動作幅度正規化，較適合用於比較不同詞彙片段之間的平滑程度。
+除時間域 jerk 指標外，本研究亦計算 spectral arc length（SAL）。
+SAL 先由參數序列計算速度訊號，再對速度訊號進行頻譜分析；若速度訊號含有較多高頻震盪，頻譜曲線長度會增加，使 SAL 數值更負。
+令 $\hat{S}_{k}$ 為正規化後的速度頻譜，$\hat{\omega}_{k}$ 為正規化後的頻率，則 SAL 可表示為：
+
+\begin{equation}
+    \mathrm{SAL}
+    =
+    -
+    \sum_{k}
+    \sqrt{
+    \left(
+    \hat{\omega}_{k+1}
+    -
+    \hat{\omega}_{k}
+    \right)^{2}
+    +
+    \left(
+    \hat{S}_{k+1}
+    -
+    \hat{S}_{k}
+    \right)^{2}
+    }.
+    \label{eq:word_smoothing_sal}
+\end{equation}
+
+SAL 為越高越好，亦即數值越接近 0 代表速度頻譜越平順、動作越少高頻抖動 \cite{balasubramanian2012smoothness,balasubramanian2015smoothness}。
+在本實驗中，$J_{\mathrm{mean}}$ 與 $J_{\mathrm{norm}}$ 皆為越低越好，SAL 則為越高越好。
+此外，本研究使用 DWPose keypoints 計算 PCK@0.10 作為輔助檢查。
+PCK（Percentage of Correct Keypoints）表示投影關鍵點落在容許誤差範圍內的比例 \cite{toshev2014deeppose}。
+PCK@0.10 代表以 bounding box 尺度之 10\% 作為容許誤差。
+此指標用於確認平滑後的動作未嚴重偏離原始二維觀測，不作為主要平滑度結果，而是用於觀察平滑與動作保真度之間的取捨。
+
+\subsection{實驗結果}
+
+表~\ref{tab:word_smoothing_metric_summary} 顯示 10 個詞彙樣本在平滑前後的平均平滑度指標。
+結果顯示，SMPL-X body pose 與 MANO hand pose 的 jerk 相關指標在所有樣本上皆下降。
+其中，SMPL-X body pose normalized jerk cost 平均由 $6.14\times10^{9}$ 降至 $5.28\times10^{6}$，平均降低 99.90\%；MANO hand pose normalized jerk cost 平均由 $4.86\times10^{9}$ 降至 $6.16\times10^{6}$，平均降低 99.87\%。
+頻譜平滑度方面，SMPL-X body pose SAL 由 -4.6400 提升至 -2.6565，MANO hand pose SAL 則由 -4.3917 提升至 -2.8392，代表平滑後速度訊號中的高頻震盪降低。
+此結果表示詞彙層級平滑能有效抑制追蹤參數中的高頻變化。
+
+\begin{table}[H]
+\centering
+\caption{詞彙層級平滑之前後平均平滑度指標比較}
+\label{tab:word_smoothing_metric_summary}
+\small
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lrrrr}
+\toprule
+指標 & 平滑前 & 平滑後 & 平均變化 & 改善樣本數 \\
+\midrule
+SMPL-X body pose normalized jerk cost $\downarrow$ & $6.14\times10^{9}$ & $5.28\times10^{6}$ & $-99.90\%$ & 10/10 \\
+SMPL-X body pose mean jerk $\downarrow$ & 0.3620 & 0.0051 & $-98.61\%$ & 10/10 \\
+SMPL-X body pose spectral arc length $\uparrow$ & -4.6400 & -2.6565 & $+41.44\%$ & 10/10 \\
+MANO hand pose normalized jerk cost $\downarrow$ & $4.86\times10^{9}$ & $6.16\times10^{6}$ & $-99.87\%$ & 10/10 \\
+MANO hand pose mean jerk $\downarrow$ & 1.4167 & 0.0144 & $-98.94\%$ & 10/10 \\
+MANO hand pose spectral arc length $\uparrow$ & -4.3917 & -2.8392 & $+33.90\%$ & 10/10 \\
+% SMPL-X all pose mean jerk $\downarrow$ & 1.3167 & 1.1942 & $-11.02\%$ & 10/10 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+表~\ref{tab:word_smoothing_sample_results} 進一步列出各詞彙樣本的百分比變化。
+所有樣本在 body pose jerk 與 MANO hand pose jerk 上皆有明顯下降，表示平滑效果並非只出現在單一詞彙或單一手型類別。
+
+% \begin{table}[H]
+% \centering
+% \caption{各詞彙樣本之平滑度改善比例}
+% \label{tab:word_smoothing_sample_results}
+% \small
+% \resizebox{\textwidth}{!}{
+% \begin{tabular}{llrrr}
+% \toprule
+% 類別 & 詞彙 & SMPL-X body jerk 變化 & MANO hand jerk 變化 & SMPL-X all pose jerk 變化 \\
+% \midrule
+% 單手 & 是 & $-98.71\%$ & $-99.26\%$ & $-5.21\%$ \\
+% 單手 & 星期四 & $-98.45\%$ & $-98.79\%$ & $-13.09\%$ \\
+% 單手 & 冷靜 & $-98.53\%$ & $-99.08\%$ & $-10.21\%$ \\
+% 單手 & 好吃 & $-98.85\%$ & $-99.08\%$ & $-19.33\%$ \\
+% 單手 & 音樂 & $-98.45\%$ & $-98.98\%$ & $-9.49\%$ \\
+% 雙手 & 陪伴 & $-98.58\%$ & $-98.75\%$ & $-10.67\%$ \\
+% 雙手 & 進入(空間) & $-98.52\%$ & $-98.82\%$ & $-17.48\%$ \\
+% 雙手 & 辦公室 & $-98.58\%$ & $-98.85\%$ & $-13.37\%$ \\
+% 雙手 & 表演 & $-98.65\%$ & $-99.11\%$ & $-7.18\%$ \\
+% 雙手 & 糖果 & $-98.81\%$ & $-98.66\%$ & $-4.21\%$ \\
+% \bottomrule
+% \end{tabular}
+% }
+% \end{table}
+
+\begin{table}[H]
+\centering
+\caption{各詞彙樣本之平滑度改善比例}
+\label{tab:word_smoothing_sample_results}
+\small
+\resizebox{\textwidth}{!}{
+\begin{tabular}{llrr}
+\toprule
+類別 & 詞彙 & SMPL-X body jerk 變化 & MANO hand jerk 變化 \\
+\midrule
+單手 & 是 & $-98.71\%$ & $-99.26\%$ \\
+單手 & 星期四 & $-98.45\%$ & $-98.79\%$ \\
+單手 & 冷靜 & $-98.53\%$ & $-99.08\%$ \\
+單手 & 好吃 & $-98.85\%$ & $-99.08\%$ \\
+單手 & 音樂 & $-98.45\%$ & $-98.98\%$ \\
+雙手 & 陪伴 & $-98.58\%$ & $-98.75\%$ \\
+雙手 & 進入(空間) & $-98.52\%$ & $-98.82\%$ \\
+雙手 & 辦公室 & $-98.58\%$ & $-98.85\%$ \\
+雙手 & 表演 & $-98.65\%$ & $-99.11\%$ \\
+雙手 & 糖果 & $-98.81\%$ & $-98.66\%$ \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+由於詞彙平滑會直接修改動作參數，平滑度指標改善本身屬於方法效果的量化驗證，而不應單獨解讀為動作語意或追蹤準確度提升。
+因此，本研究另以前述 PCK@0.10 進行輔助檢查。
+在 10 個樣本中，body-hand PCK@0.10 平均由 0.9913 變為 0.9909，平均變化為 $-0.03\%$，顯示身體與手部整體二維關鍵點對齊大致維持穩定。
+然而，hand-only PCK@0.10 平均由 0.9476 下降至 0.8868，平均變化為 $-6.66\%$，表示手部細節在平滑後可能犧牲部分逐幀對齊精度。
+綜合而言，詞彙層級平滑適合作為降低視覺抖動與提升觀看連續性的後處理方法；但在論文結論中，應將其描述為平滑度改善，而非追蹤準確度改善。
+
+\section{EHM-Tracker 最佳化步數比較實驗}
+\label{sec:exp_tracking_steps}
+
+在建立手語詞彙動作資料庫時，本研究觀察到部分單手離開畫面或手部可見度較低之影片，在 EHM-Tracker 最佳化步數較長時，可能產生手部位置偏移或不自然對齊。
+為分析此現象，本研究分別針對單手低可見度情境與雙手可見情境，比較 EHM-Tracker 使用 100-step 與 1000-step 最佳化設定之追蹤結果。
+本實驗目的並非重新評估 DWPose 或 GUAVA 模型本身，而是分析不同最佳化步數對後續手語動作資料品質之影響。
+
+\subsection{評估指標}
+
+本研究採用 DWPose 偵測之 2D whole-body keypoints 作為 pseudo ground truth。
+DWPose 為 whole-body 2D pose estimation 方法，可定位人體、手部、臉部與足部等關鍵點 \cite{yang2023dwpose}。
+在 EHM-Tracker 中，DWPose 偵測點會作為人體參數最佳化過程中的二維觀測約束；追蹤完成後，本研究再將已優化之 EHM/SMPL-X 3D joints 重新投影回影像平面，並與原始 DWPose 2D keypoints 比較。
+此類以三維人體模型投影關鍵點與二維偵測點比較之作法，亦常見於 SMPLify 與 HMR 等三維人體重建研究 \cite{bogo2016smplify,kanazawa2018hmr}。
+
+給定第 $t$ 幀第 $i$ 個三維關節 $\mathbf{J}_{t,i}$，其投影至二維影像平面後之關鍵點可表示為：
+
+\begin{equation}
+    \hat{\mathbf{k}}_{t,i}
+    =
+    \Pi(\mathbf{R}_{t}\mathbf{J}_{t,i} + \mathbf{T}_{t}),
+    \label{eq:reprojection_projection}
+\end{equation}
+
+其中 $\mathbf{R}_{t}$ 與 $\mathbf{T}_{t}$ 來自追蹤結果中的 \texttt{camera\_RT\_params}，$\Pi(\cdot)$ 表示相機投影函式。
+由於 EHM/SMPL-X 與 DWPose 使用不同的關鍵點定義與索引順序，本研究先將 EHM/SMPL-X joints 轉換至 DWPose keypoint 順序，再進行比較。
+二維重投影誤差定義為：
+
+\begin{equation}
+    e_{t,i}
+    =
+    \left\|
+    \hat{\mathbf{k}}_{t,i}
+    -
+    \mathbf{k}^{\mathrm{DWPose}}_{t,i}
+    \right\|_{2},
+    \label{eq:reprojection_error}
+\end{equation}
+
+其中 $\mathbf{k}^{\mathrm{DWPose}}_{t,i}$ 為 DWPose 偵測之二維關鍵點。
+實作上，本研究僅納入 DWPose 信心分數高於門檻之關鍵點，以降低低可信度偵測點對評估結果的干擾。
+
+除 reprojection error 外，本研究亦計算 PCK（Percentage of Correct Keypoints）。
+PCK 為人體姿態估計中常用之關鍵點正確率指標 \cite{toshev2014deeppose}。
+本研究定義當 $e_{t,i}$ 小於門檻 $\alpha s_t$ 時，該關鍵點視為正確，其中 $s_t$ 為第 $t$ 幀有效關鍵點之 bounding box 尺度：
+
+\begin{equation}
+    \mathrm{PCK}_{\alpha}
+    =
+    \frac{
+    \sum_{t,i} \mathbb{I}(e_{t,i} < \alpha s_t)
+    }{
+    \sum_{t,i} 1
+    }.
+    \label{eq:pck}
+\end{equation}
+
+本研究報告 $\mathrm{PCK}_{0.05}$ 與 $\mathrm{PCK}_{0.10}$，分別代表以 bounding box 尺度之 5\% 與 10\% 作為容許誤差。
+需注意的是，本實驗使用 DWPose 偵測結果作為 pseudo ground truth，因此指標主要反映模型投影結果與二維偵測結果之一致性，而非人工標註下的絕對姿態誤差。
+
+\subsection{量化結果}
+
+表~\ref{tab:tracking_step_reprojection} 與表~\ref{tab:tracking_step_pck} 分別列出 100-step 與 1000-step 在「可以」與「叫老師」兩個單手代表樣本上的 reprojection error 與 PCK 結果。
+reprojection error 之單位為 pixel，數值越低代表投影後關鍵點越接近 DWPose 偵測點；PCK 數值越高代表符合門檻之有效關鍵點比例越高。
+這兩個樣本之左手有效關鍵點數分別僅有 49 與 158，明顯少於右手之 982 與 1907，顯示左手在此類單手樣本中屬於低可見度或偵測較不穩定的部位。
+
+\begin{table}[H]
+\centering
+\caption{EHM-Tracker 不同最佳化步數之 2D reprojection error 比較}
+\label{tab:tracking_step_reprojection}
+\begin{tabular}{llrrrrr}
+\toprule
+中文詞彙 & 步數 & All & Body+Hand & Hand & Left Hand & Right Hand \\
+\midrule
+可以 & 100  & 8.45 & 20.48 & 22.30 & \metricmark{72.55} & 20.06 \\
+可以 & 1000 & 10.46 & 27.65 & 22.84 & 307.28 & 10.14 \\
+叫老師 & 100  & 10.45 & 17.28 & 16.12 & \metricmark{53.77} & 13.44 \\
+叫老師 & 1000 & 9.54 & 22.94 & 19.10 & 170.18 & 8.33 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{EHM-Tracker 不同最佳化步數之手部 PCK 比較}
+\label{tab:tracking_step_pck}
+\begin{tabular}{llrrrr}
+\toprule
+中文詞彙 & 步數 & Hand PCK@0.05 & Left PCK@0.10 & Right PCK@0.10 & Hand PCK@0.10 \\
+\midrule
+可以 & 100  & 0.610 & \metricmark{0.980} & 0.322 & 0.811 \\
+可以 & 1000 & 0.777 & 0.265 & 0.731 & 0.882 \\
+叫老師 & 100  & 0.748 & \metricmark{0.519} & 0.744 & 0.946 \\
+叫老師 & 1000 & 0.868 & 0.259 & 0.874 & 0.956 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+由結果可觀察到，1000-step 在右手與整體手部 PCK 上多數較高，表示其對部分可見手部關鍵點具有較高的二維偵測點一致性。
+然而，在單手離開畫面情境中，1000-step 對低可見度的左手產生明顯較大的 reprojection error。
+例如「可以」之 left hand reprojection error 由 100-step 的 72.55 pixels 增加至 1000-step 的 307.28 pixels；「叫老師」亦由 53.77 pixels 增加至 170.18 pixels。
+相對地，兩個樣本的右手 reprojection error 均下降，且 hand PCK@0.05 亦分別由 0.610 提升至 0.777、由 0.748 提升至 0.868。
+此結果顯示較長最佳化步數雖可能改善可見手部關鍵點之貼合，但在低可見度或離開畫面手部上亦可能產生較大的偏移。
+此外，本研究亦觀察到部分樣本雖在 hand reprojection error 或 PCK 上呈現 1000-step 較佳，但可視化結果仍出現低可信度或畫面外手部被模型錯誤拉回人體附近的情形。
+因此，本實驗之量化指標應視為與 DWPose 二維偵測點一致性的輔助量測，而非資料庫品質的唯一判準。
+更多單手與雙手代表性樣本之詳細數據列於附件二。 %~\ref{appendix:tracking_step}。
+
+\begin{table}[H]
+\centering
+\caption{EHM-Tracker 追蹤可視化圖中各色點之意義}
+\label{tab:tracking_visual_keypoint_colors}
+\begin{tabular}{lll}
+\toprule
+顏色 & 代表內容 & 說明 \\
+\midrule
+綠色 & DWPose 二維關鍵點 & 作為 reprojection error 與 PCK 計算時的 pseudo ground truth \\
+紅色 & 模型投影二維關鍵點 & EHM/SMPL-X 追蹤結果投影至影像平面後的關鍵點 \\
+藍色 & 額外模型參考點 & 包含臉部 203 點與手部三維 prior joints 之投影結果 \\
+紫紅色 & 三維頂點投影 & 頭部與手部 selected mesh vertices 投影至影像平面後的結果 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+圖~\ref{fig:tracking_step_visual_comparison} 進一步呈現「可以」與「叫老師」於相同影格下之 100-step 與 1000-step 追蹤可視化比較，使讀者能對照表格結果理解單手離開畫面時的追蹤差異。
+
+\begin{figure}[H]
+    \centering
+    \begin{tabular}{cc}
+        \textbf{可以，100-step} & \textbf{叫老師，100-step} \\
+        \includegraphics[width=0.46\textwidth]{appendix2/1_hand/can_step100.png} &
+        \includegraphics[width=0.46\textwidth]{appendix2/1_hand/call_teacher_step100.png} \\
+        \textbf{可以，1000-step} & \textbf{叫老師，1000-step} \\
+        \includegraphics[width=0.46\textwidth]{appendix2/1_hand/can_step1000.png} &
+        \includegraphics[width=0.46\textwidth]{appendix2/1_hand/call_teacher_step1000.png}
+    \end{tabular}
+    \caption{EHM-Tracker 100-step 與 1000-step 追蹤結果可視化比較。每張追蹤結果影像皆由左、中、右三個畫面組成：左圖為原始影片影格及二維關鍵點對齊結果，中圖為 EHM/SMPL-X 三維人體模型重建結果，右圖為模型投影回原始影像後之疊合結果；各色點意義如表~\ref{tab:tracking_visual_keypoint_colors} 所示。此圖呈現「可以」與「叫老師」兩個單手代表樣本，用以輔助說明低可見度手部在長步數最佳化下可能產生之偏移。}
+    \label{fig:tracking_step_visual_comparison}
+\end{figure}
+
+另一方面，在雙手清楚可見的樣本中，1000-step 則呈現較穩定的改善趨勢。
+% 附件~\ref{appendix:tracking_step} 中列出的 10 個雙手代表樣本皆顯示 hand reprojection error 下降，且 PCK@0.05 與 PCK@0.10 多數提升。
+附件二中列出的 10 個雙手代表樣本皆顯示 hand reprojection error 下降，且 PCK@0.05 與 PCK@0.10 多數提升。
+此結果表示較長最佳化步數在 DWPose 偵測穩定、雙手皆可見的情境下，確實有助於提升模型與二維偵測點的一致性。
+然而，雙手樣本中的改善幅度整體並不大，主要反映追蹤結果較穩定，而非帶來質變式提升。
+相較之下，單手低可信度或離開畫面樣本一旦發生誤追蹤，可能直接破壞手語語意與後續動作串接品質。
+
+綜合上述結果，本研究在後續手語資料集追蹤時採用 100-step 設定作為主要前處理參數。
+此設定並不表示 100-step 在所有情境皆優於 1000-step；事實上，1000-step 在雙手清楚可見或 DWPose 偵測穩定時，常能降低 reprojection error 並提升 PCK。
+然而，本研究建置的是後續動畫生成所需之詞彙動作資料庫，資料品質的優先考量並非平均指標最佳，而是避免少數嚴重誤追蹤破壞手語語意與動作串接穩定性。
+因此，本研究選擇較保守的 100-step 設定，以降低低可信度手部或單手離開畫面情境下手部偏移與誤追蹤的風險。
+
+\section{中文至虛擬人手語動畫之整合展示}
+\label{sec:exp_integrated_demo}
+
+本節展示完整中文至虛擬人手語動畫生成結果。
+系統流程包含中文輸入、SLT 模組輸出 gloss sequence、詞彙動作資料檢索、動作片段裁切與平滑串接，以及 GUAVA avatar rendering。
+不同於第~\ref{sec:exp_smoothing_result} 節著重於相鄰詞彙之間的過渡幀，本節主要呈現系統端到端生成完成後的介面結果，以確認自然語言輸入、gloss sequence、單詞影片檢索與最終虛擬人手語動畫能在同一流程中完成。
+因此，本節不再重複放置連續幀圖，而以兩個完整系統輸出案例說明整合結果。
+表~\ref{tab:integrated_demo_examples} 列出本節展示之輸入句與對應 gloss sequence。
+
+\begin{table}[H]
+\centering
+\caption{中文至虛擬人手語動畫整合展示範例}
+\label{tab:integrated_demo_examples}
+\begin{tabular}{lll}
+\toprule
+編號 & 中文輸入 & gloss sequence \\
+\midrule
+1 & 弟弟不喜歡吃番茄 & 弟弟/吃/番茄/不喜歡/。 \\
+2 & 今天在哪裡上課 & 今天/哪裡/上課/\textcolor{gray}{疑問表情} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+第一個例子為「弟弟不喜歡吃番茄」，其生成完成後之系統呈現如圖~\ref{fig:slt_output_ui_example} 所示。
+系統將中文輸入轉換為「弟弟/吃/番茄/不喜歡」之 gloss sequence，並依序載入各 gloss 對應之單詞影片與追蹤資料，最後輸出串接後的虛擬人手語動畫。
+
+第二個例子為「今天在哪裡上課」，其生成完成後之系統呈現如圖~\ref{fig:integrated_demo_today_where_class} 所示。
+此例包含時間詞「今天」、疑問詞「哪裡」與動作詞「上課」，系統輸出 gloss sequence 為「今天/哪裡/上課/疑問表情」。
+其中「疑問表情」為 SLT 輸出中的非手部語意標記，本研究目前保留此標記作為語氣提示；實際進行動作資料檢索與串接時，主要處理「今天」、「哪裡」與「上課」三個具有對應詞彙影片的 gloss。
+兩者介面中同時呈現自然語言輸入、模型輸入與模型輸出、手語轉換結果、渲染完成影片，以及各 gloss 對應之原始單詞影片，可用以檢查中文句子、gloss sequence 與最終動畫之間的一致性。
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{ch4/result/today_where_class_system_output.png}
+    \caption{中文輸入「今天在哪裡上課」於整體系統介面中之輸出範例。介面呈現人物形象來源、自然語言輸入、SLT 模組之模型輸入與模型輸出、手語轉換結果、GUAVA 渲染完成影片，以及「今天」、「哪裡」、「上課」等 gloss 對應之單詞影片。}
+    \label{fig:integrated_demo_today_where_class}
+\end{figure}
+
+除本節所示之靜態系統截圖外，完整 demo 影片另提供於線上連結\footnote{\url{https://youtu.be/R7eeNWv5J_c}}。
+
+\section{使用者評估問卷與回覆分析}
+\label{sec:exp_questionnaire}
+
+除量化追蹤指標外，本研究亦設計使用者問卷，以評估系統生成手語動畫在主觀觀看上的自然度、清晰度、整體品質與動作準確度。
+問卷採用 Likert 5 分量表，要求填答者觀看系統生成之 25 支串接手語動畫，以及各影片所對應之原始詞彙參考影片後進行評分。
+Likert 量表常用於問卷研究中量測填答者對陳述項目的同意程度或主觀感受強度 \cite{likert1932technique}。
+本節依序說明問卷設計、填答者背景、整體評分結果、手語能力分組差異、各影片評分分布，以及開放式意見分析。
+
+\subsection{問卷設計與分析方式}
+
+問卷第一題詢問填答者之手語能力背景，選項如下：
+
+\begin{enumerate}
+    \item 不會手語
+    \item 略懂手語
+    \item 具備基本手語溝通能力
+    \item 手語使用者 / 手語相關專業人士
+\end{enumerate}
+
+接著，填答者需針對每一支系統生成動畫回答四個評估項目，皆以 1 至 5 分表示，其中 1 分代表非常不同意或非常差，5 分代表非常同意或非常好。
+問卷評估項目如表~\ref{tab:questionnaire_items} 所示。
+
+\begin{table}[H]
+\centering
+\caption{使用者評估問卷項目}
+\label{tab:questionnaire_items}
+\begin{tabular}{p{0.18\textwidth}p{0.72\textwidth}}
+\toprule
+評估項目 & 問卷陳述 \\
+\midrule
+動作自然度 & 我認為此系統生成動畫的動作銜接與身體姿態自然。 \\
+手勢清晰度 & 我認為此系統生成動畫中的手形與手部動作清楚可辨。 \\
+整體品質 & 我認為此系統生成動畫的整體視覺品質良好。 \\
+準確度 & 觀看原始參考影片後，我認為系統生成動畫與原始影片所表達的手語動作相符。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+本研究共回收 53 份有效問卷，每位填答者皆針對 25 支系統生成影片進行評分。
+統計時先計算每位填答者在 25 支影片上的平均分數，再以受試者為單位統計各指標之平均值與標準差，以避免單一填答者因影片數量造成重複計算。
+此外，為觀察手語能力背景是否影響評分，本研究將填答者分為「不會手語者」與「會手語者」兩組；其中「會手語者」包含略懂手語、具備基本手語溝通能力，以及手語使用者或手語相關專業人士。
+兩組平均分數差異以 Welch t-test 進行檢定，並以 $p < 0.05$ 作為顯著差異判準。
+
+圖~\ref{fig:questionnaire_interface} 為問卷介面或影片播放與評分頁面截圖，說明填答者如何觀看原始參考影片與系統生成動畫並完成評分。
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth,height=0.70\textheight,keepaspectratio]{ch4/questionnaire/questionnaire_interface.png}
+    \caption{使用者評估問卷介面範例。填答者觀看原始詞彙參考影片與系統生成動畫後，針對動作自然度、手勢清晰度、整體品質與準確度進行 1 至 5 分評分。}
+    \label{fig:questionnaire_interface}
+\end{figure}
+
+\subsection{填答者背景}
+
+本研究有效填答者共 53 人。
+如表~\ref{tab:questionnaire_participant_background} 所示，不會手語者共有 41 人，占 77.4\%；具有不同程度手語背景者共有 12 人，占 22.6\%。
+由於手語使用者或相關專業人士人數較少，本研究在後續分組比較中將略懂手語、具備基本手語溝通能力，以及手語使用者或相關專業人士合併為「會手語者」群組。
+
+\begin{table}[H]
+\centering
+\caption{填答者手語能力背景分布與比例圖}
+\label{tab:questionnaire_participant_background}
+\begin{minipage}[c]{0.48\textwidth}
+\centering
+\small
+\begin{tabular}{p{0.58\linewidth}cc}
+\toprule
+手語能力背景 & 人數 & 比例 \\
+\midrule
+不會手語 & 41 & 77.4\% \\
+略懂手語 & 3 & 5.7\% \\
+具備基本手語溝通能力 & 6 & 11.3\% \\
+手語使用者 / 手語相關專業人士 & 3 & 5.7\% \\
+\midrule
+合計 & 53 & 100.0\% \\
+\bottomrule
+\end{tabular}
+\end{minipage}
+\hfill
+\begin{minipage}[c]{0.46\textwidth}
+\centering
+\includegraphics[width=\linewidth]{ch4/questionnaire/participant_group_distribution.png}
+\end{minipage}
+\end{table}
+
+\subsection{整體評分結果}
+
+表~\ref{tab:questionnaire_overall_scores} 與圖~\ref{fig:questionnaire_overall_metric_scores} 顯示全體填答者於四項指標之平均分數。
+整體而言，四項指標平均皆介於 3.80 至 4.01 之間，表示多數填答者對系統生成動畫持正向評價。
+其中，準確度平均分數最高，為 4.01；手勢清晰度次之，為 3.96。
+動作自然度與整體品質平均皆為 3.80，顯示填答者雖大致認同生成結果可表達原始手語內容，但在動作銜接、姿態自然度與視覺品質上仍有改善空間。
+
+\begin{table}[H]
+\centering
+\caption{全體填答者之使用者評估結果}
+\label{tab:questionnaire_overall_scores}
+\begin{tabular}{lccc}
+\toprule
+評估指標 & 平均分數 & 標準差 & 平均 $\pm$ 標準差 \\
+\midrule
+動作自然度 & 3.80 & 0.82 & 3.80 $\pm$ 0.82 \\
+手勢清晰度 & 3.96 & 0.77 & 3.96 $\pm$ 0.77 \\
+整體品質 & 3.80 & 0.90 & 3.80 $\pm$ 0.90 \\
+準確度 & 4.01 & 0.82 & 4.01 $\pm$ 0.82 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.72\textwidth]{ch4/questionnaire/overall_metric_scores.png}
+    \caption{全體填答者於四項評估指標之平均分數。誤差棒表示標準差。}
+    \label{fig:questionnaire_overall_metric_scores}
+\end{figure}
+
+\subsection{手語能力分組比較}
+
+為進一步分析手語能力背景對主觀評價之影響，本研究比較不會手語者與會手語者於四項指標上的平均分數。
+結果如表~\ref{tab:questionnaire_group_comparison} 所示，不會手語者在四項指標上皆給予較高評分，而會手語者評分較低且標準差較大。
+表中「全體」、「不會手語者」與「會手語者」欄位皆表示平均分數 $\pm$ 標準差，$p$ value 則為不會手語者與會手語者兩組之 Welch t-test 檢定結果。
+Welch t-test 結果顯示，動作自然度、手勢清晰度、整體品質與準確度四項指標皆達顯著差異。
+此結果表示具手語背景之填答者對手形、動作銜接、語意準確性與表情細節較敏感，因此評分標準相對嚴格。
+換言之，系統生成動畫對一般觀看者已具有一定可理解性，但若面向手語使用者，仍需進一步改善手部細節、語句自然度與非手部訊息。
+
+\begin{table}[H]
+\centering
+\caption{不同手語能力群組之評估結果比較與分組平均分數圖。表中數值為平均分數 $\pm$ 標準差。}
+\label{tab:questionnaire_group_comparison}
+\begin{minipage}[c]{0.52\textwidth}
+\centering
+\scriptsize
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lcccc}
+\toprule
+評估指標 & 全體 & 不會手語者 & 會手語者 & $p$ value \\
+\midrule
+動作自然度 & 3.80 $\pm$ 0.82 & 4.01 $\pm$ 0.66 & 3.10 $\pm$ 0.97 & 0.009 \\
+手勢清晰度 & 3.96 $\pm$ 0.77 & 4.15 $\pm$ 0.59 & 3.31 $\pm$ 0.98 & 0.013 \\
+整體品質 & 3.80 $\pm$ 0.90 & 3.99 $\pm$ 0.77 & 3.13 $\pm$ 1.03 & 0.017 \\
+準確度 & 4.01 $\pm$ 0.82 & 4.16 $\pm$ 0.71 & 3.50 $\pm$ 0.98 & 0.049 \\
+\bottomrule
+\end{tabular}
+}
+\end{minipage}
+\hfill
+\begin{minipage}[c]{0.42\textwidth}
+\centering
+\includegraphics[width=\linewidth]{ch4/questionnaire/group_metric_comparison.png}
+\end{minipage}
+\end{table}
+
+\subsection{各影片評分分布}
+
+除整體平均外，本研究亦計算每支影片於四項指標之平均分數，以觀察不同句子或動作組合造成的評價差異。
+25 支影片之四項指標平均分數介於 3.47 至 4.21 之間。
+其中，第 22 支影片平均分數最高，為 4.21；第 9 支影片平均分數最低，為 3.47。
+此結果顯示不同句子間仍存在明顯品質差異，可能與詞彙資料本身之追蹤品質、動作片段裁切、詞彙間過渡，以及手形細節是否清楚有關。
+因此，後續系統改善不應只觀察整體平均分數，也應針對低分影片回溯其詞彙組成與串接位置，以找出影響觀看品質的主要因素。
+
+\begin{table}[H]
+\centering
+\caption{各影片四項指標平均分數之排名結果與分布圖}
+\label{tab:questionnaire_video_score_examples}
+\begin{minipage}[c]{0.40\textwidth}
+\centering
+\small
+\begin{tabular}{lcc}
+\toprule
+排名 & 影片編號 & 平均分數 \\
+\midrule
+第 1 名 & 22 & 4.21 \\
+第 2 名 & 20 & 4.18 \\
+第 3 名 & 4 / 23 & 4.15 \\
+\midrule
+第 23 名 & 13 & 3.49 \\
+第 24 名 & 8 & 3.47 \\
+第 25 名 & 9 & 3.47 \\
+\bottomrule
+\end{tabular}
+\end{minipage}
+\hfill
+\begin{minipage}[c]{0.55\textwidth}
+\centering
+\includegraphics[width=\linewidth]{ch4/questionnaire/video_score_distribution.png}
+\end{minipage}
+\end{table}
+
+\subsection{開放式意見分析}
+
+問卷最後提供開放式回饋欄位，讓填答者補充對系統生成動畫的觀察。
+整體而言，填答者肯定系統能將多個手語詞彙串接為完整句子，部分回饋指出生成結果比逐一觀看單詞影片更具一致性。
+然而，多數改善建議集中於手部抖動、手形細節、表情與語氣、畫面裁切，以及詞彙間銜接自然度。
+表~\ref{tab:questionnaire_open_feedback_themes} 整理主要回饋主題與其對系統改善的意義。
+
+\begin{table}[H]
+\centering
+\caption{開放式意見之主要主題整理}
+\label{tab:questionnaire_open_feedback_themes}
+\small
+\begin{tabular}{p{0.22\textwidth}p{0.36\textwidth}p{0.32\textwidth}}
+\toprule
+回饋主題 & 主要觀察 & 對後續改善的意義 \\
+\midrule
+手部抖動與手形細節 & 多位填答者提到手部或手指偶爾出現不自然抖動，部分手形不夠精確。 & 需改善追蹤資料平滑、手部姿態穩定性與手指細節保留。 \\
+表情與非手部訊息 & 具手語背景者指出表情是手語語意的重要部分，部分句子缺少對應表情。 & 後續需加入臉部表情與語氣標記，使動畫更接近自然手語表達。 \\
+動作裁切與手部消失 & 部分回饋提到手部位置過低、靠近畫面邊界或偶爾消失。 & 需檢查原始詞彙影片裁切範圍、motion envelope 擷取與渲染視角設定。 \\
+詞彙串接自然度 & 部分填答者認為單詞拼接後仍有不連續感，句子層級不如自然手語流暢。 & 需改善詞彙間過渡幀、動作速度一致性與句子層級姿態規劃。 \\
+輔助資訊需求 & 有填答者建議加入文字或語音輔助，以利未學過手語者對照理解。 & 系統展示可加入中文字幕、gloss 標示或原始影片對照，提升可解釋性。 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+由開放式意見可看出，系統目前已能生成具基本可觀看性的虛擬人手語動畫，但尚未完全達到手語使用者對自然表達的期待。
+尤其是手部細節與臉部表情，對手語語意判讀具有重要影響；若僅改善整體姿態或平均評分，仍可能忽略專業使用者最在意的語言細節。
+因此，問卷結果與前述追蹤步數實驗相互呼應：後續系統改善應同時考慮量化追蹤品質、視覺穩定性，以及手語語言層面的自然度。
+
+\subsection{問卷結果小結}
+
+綜合問卷結果，本研究系統在四項評估指標上皆獲得接近或高於 4 分的平均評價，其中準確度與手勢清晰度表現較佳，表示生成動畫大致能呈現原始詞彙影片所表達之內容。
+然而，不會手語者與會手語者之評分存在顯著差異，顯示具手語背景者更容易察覺手形、表情與句子銜接上的不足。
+因此，本系統已具備中文至虛擬人手語動畫生成之可行性，但若要進一步面向實際手語使用情境，仍需強化手部細節穩定性、非手部訊息生成與句子層級動作自然度。
+
+\section{小結}
+\label{sec:exp_summary}
+
+本章說明本研究之實驗設計與結果呈現方式。
+首先，本章展示系統執行環境與操作介面，說明使用者可由中文文本輸入取得 gloss sequence 與虛擬人手語動畫輸出。
+接著，以多個中文句子展示 SLT 模組之 gloss sequence 輸出，並說明 gloss 至手語動作資料之檢索、motion envelope 區間擷取與詞彙間過渡幀生成結果。
+雙閾值敏感度分析顯示目前 1.2/0.35 設定位於七個實驗詞彙的相對穩定區域，但在缺乏人工起訖標註下，不將其解讀為最佳準確率設定；左右手 motion envelope 比較則顯示，個別分析有助於解釋主要動作手之貢獻，但左右手加總方法較能以一致流程涵蓋單手與雙手詞彙。
+在詞彙片段後處理方面，本章以 jerk、normalized jerk cost 與 spectral arc length 量化詞彙層級平滑前後之參數變化，結果顯示該方法能明顯降低動作參數中的高頻抖動，但手部細節仍需在平滑與對齊精度之間取得平衡。
+在追蹤資料前處理方面，本章比較 EHM-Tracker 100-step 與 1000-step 最佳化設定，並以 2D reprojection error 與 PCK 分析單手離開畫面情境下的追蹤差異。
+此外，本章呈現完整動畫生成案例，並透過使用者問卷分析生成動畫之自然度、手勢清晰度、整體品質與準確度。
+上述實驗共同驗證本研究系統由中文文本至虛擬人手語動畫生成之可行性，並為後續系統改善與手語資料庫擴充提供分析依據。
+
+\end{document}

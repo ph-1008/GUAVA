@@ -1,0 +1,26 @@
+
+export PYTHONPATH='.'
+python tracking_video.py \
+    --in_root assets/examples/videos/find.mp4 \
+    --output_dir results/find_step100  \
+    --save_vis_video --save_images \
+    --optimization_steps 100 \
+    --check_hand_score 0.0 -n 1 -v 1 \
+    --visible_gpus 1
+    --not_check_hand
+
+python tracking_video.py \
+  --in_root your_video.mp4 \
+  --check_hand_score 0.6 \              # 降低置信度要求
+  --check_hand_visible_ratio 0.4 \      # 降低可见性要求
+  --require_both_hands False            # 允许单手            ------------x
+
+export PYTHONPATH='.'
+python tracking_video.py \
+    --in_root assets/examples/videos/00019.mp4 \
+    --output_dir results/00019_1  \
+    --save_vis_video --save_images \
+    --check_hand_visible_ratio 0.4 \      
+    --require_both_hands False
+
+

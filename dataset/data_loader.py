@@ -327,6 +327,10 @@ def squeeze_params(tracking_info):
     return tracking_info
 
 def load_dict_pkl(path, encoding='') -> dict:
+    print(f"--------DEBUG: Checking file path: {repr(path)}")
+    print(f"--------DEBUG: Dir list: {os.listdir(os.path.dirname(path))}")
+    print(f"--------DEBUG: User: {os.getuid()}")
+
     assert os.path.exists(path)
     with open(path, 'rb') as fid:
         if encoding != '':

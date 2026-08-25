@@ -33,7 +33,7 @@ MODEL:
         small: True
 
 TRAIN:
-    exp_str: 'training/full'
+    exp_str: 'training/TWTSL'
     batch_size: 6
     train_iter: 200000 
     check_interval: 10000
@@ -62,4 +62,4 @@ DATASET:
     origin_image_size: 1024
     head_crop_size: 512
     hand_crop_size: 512
-    data_path: 'path_to/dataset/tracked_ubody_dataset'
+    data_path: '/home/paohan/GUAVA/EHM-Tracker/results/TWTSL_lmdb_dataset/'

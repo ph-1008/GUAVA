@@ -1,0 +1,7 @@
+__pycache__
+test.py
+~$*.xlsx
+CODE/Other_task/*/*/
+!CODE/Other_task/*/doc/
+!CODE/Other_task/*/adapter/
+CODE/GUI/*/CODE/GUI/best_model/model.safetensors

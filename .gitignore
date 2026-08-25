@@ -1,0 +1,72 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Python build
+*.egg-info/
+
+# Runtime output
+outputs/
+outputs_2/
+
+# Gradio
+.gradio/
+
+# Large checkpoints
+assets/GUAVA/checkpoints/
+
+# Model weights
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.bin
+*.npy
+*.npz
+
+# Tracking/runtime binary data
+*.mdb
+*.pkl
+**/img_lmdb/
+
+# Local datasets and generated tracking samples
+assets/TWTSL/
+assets/example/
+assets/FLAME/FLAME2020/
+sign_translate_code/Dataset/
+sign_translate_code/CODE/Other_task/data/*.csv
+
+# Translation model evaluation/output files
+sign_translate_code/CODE/GUI/best_model/*.csv
+sign_translate_code/CODE/Other_task/**/predictions.csv
+sign_translate_code/CODE/Other_task/**/*predictions.csv
+sign_translate_code/CODE/Other_task/**/gloss_output.xlsx
+sign_translate_code/CODE/Other_task/GPT_sign_accurate/*.csv
+sign_translate_code/CODE/Other_task/GPT_sign_accurate/*.xlsx
+sign_translate_code/gloss_output.txt
+sign_translate_code/output*.xlsx
+sign_translate_code/output_results.csv
+sign_translate_code/實驗結果.xlsx
+
+# Experiment outputs: keep source code, configs and README files only
+experiment/**
+!experiment/**/
+!experiment/**/*.py
+!experiment/**/*.sh
+!experiment/**/*.yaml
+!experiment/**/*.yml
+!experiment/**/README.md
+
+# Backup files
+*.backup
+
+# Archives
+*.zip
+
+# LaTeX temporary files
+latex/*.aux
+latex/*.log
+latex/*.out
+latex/*.toc
+latex/*.synctex.gz

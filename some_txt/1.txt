@@ -1,0 +1,20 @@
+cd /home/paohan/GUAVA && PYTHONPATH=/home/paohan/GUAVA:$PYTHONPATH python main/test.py \
+  -d '0' -m assets/GUAVA -s outputs/concatenated_tracking_peak_based_final_2_0107_working/concat_render_cross \
+  --data_path /home/paohan/GUAVA/outputs/concatenated_tracking_peak_based_final_2_0107_working \
+  --source_data_path /home/paohan/GUAVA/outputs/app/tracked_source_image/Gemini_Generated_Image_kzne4skzne4skzne \
+  --skip_self_act --render_cross_act
+
+
+
+cd /home/paohan/GUAVA && PYTHONPATH=/home/paohan/GUAVA:$PYTHONPATH python main/test.py \
+  -d '0' -m assets/GUAVA -s outputs/concatenated_smoothed_0128_working/concat_render_cross \
+  --data_path /home/paohan/GUAVA/outputs/concatenated_smoothed_0128_working \
+  --source_data_path /home/paohan/GUAVA/outputs/app/tracked_source_image/Gemini_Generated_Image_kzne4skzne4skzne \
+  --skip_self_act --render_cross_act
+
+
+
+
+▲▲▲tracking_concatenation_final_3.py修改 (大家上課準時要) 擷取幀數不對 
+→改成取第一與最後的峰值 & 無峰值時應該取哪
+"/home/paohan/GUAVA/outputs/concatenated_smoothed_0115_on_time/peak_analysis_4_要.png"

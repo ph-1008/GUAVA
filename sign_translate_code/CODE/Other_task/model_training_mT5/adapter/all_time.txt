@@ -1,0 +1,62 @@
+Large
+--- Analysis of Custom Recorded Functions ---
+Total time for 50 steps (tracked functions): 21000.46 ms
+
+--------------------------------------------------
+Function: forward_pass
+  - Total Time: 8801.72 ms
+  - Average Time per call: 86.2914 ms
+  - Percentage of Total Time: 41.91%
+--------------------
+Function: backward_pass
+  - Total Time: 10218.49 ms
+  - Average Time per call: 100.1813 ms
+  - Percentage of Total Time: 48.66%
+--------------------
+Function: optimizer_step
+  - Total Time: 1980.25 ms
+  - Average Time per call: 38.8284 ms
+  - Percentage of Total Time: 9.43%
+--------------------
+
+Base LoRA
+--- Analysis of Custom Recorded Functions ---
+Total time for 50 steps (tracked functions): 10113.81 ms
+
+--------------------------------------------------
+Function: forward_pass
+  - Total Time: 3631.59 ms
+  - Average Time per call: 35.6038 ms
+  - Percentage of Total Time: 35.91%
+--------------------
+Function: backward_pass
+  - Total Time: 5245.51 ms
+  - Average Time per call: 51.4265 ms
+  - Percentage of Total Time: 51.86%
+--------------------
+Function: optimizer_step
+  - Total Time: 1236.71 ms
+  - Average Time per call: 24.2493 ms
+  - Percentage of Total Time: 12.23%
+--------------------
+
+Base
+--- Analysis of Custom Recorded Functions ---
+Total time for 50 steps (tracked functions): 12160.82 ms
+
+--------------------------------------------------
+Function: forward_pass
+  - Total Time: 2790.99 ms
+  - Average Time per call: 27.3627 ms
+  - Percentage of Total Time: 22.95%
+--------------------
+Function: backward_pass
+  - Total Time: 5336.72 ms
+  - Average Time per call: 52.3208 ms
+  - Percentage of Total Time: 43.88%
+--------------------
+Function: optimizer_step
+  - Total Time: 4033.11 ms
+  - Average Time per call: 79.0805 ms
+  - Percentage of Total Time: 33.16%
+--------------------

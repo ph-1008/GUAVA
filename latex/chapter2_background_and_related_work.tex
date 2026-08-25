@@ -1,0 +1,434 @@
+\documentclass[class=NCU_thesis, crop=false]{standalone}
+\begin{document}
+
+\chapter{文獻回顧}
+\label{chap:related_work}
+
+本章目的在於釐清本研究於手語處理領域中的定位，並整理中文至自然手語轉換與虛擬人手語動畫生成所需之相關技術。
+由於本研究並非以手語影像辨識或手語至文字翻譯為主要目標，而是建立由中文文字輸入、轉換為自然手語詞彙序列，
+並進一步驅動虛擬人產生手語動畫之系統，因此本章首先依輸入與輸出方向整理手語處理任務，再分別回顧手語理解、手語生成、中文至台灣自然手語轉換，
+以及虛擬人動畫生成相關研究。
+
+\section{手語處理任務之分類與本研究定位}
+\label{sec:sign_language_task_taxonomy_positioning}
+
+手語處理（Sign Language Processing）並非單一任務，而是可依輸入與輸出方向區分為手語理解與手語生成兩個主要方向。
+Bragg 等人從跨領域觀點整理手語相關技術，指出手語辨識（Sign Language Recognition, SLR）、
+手語翻譯（Sign Language Translation, SLT）與手語生成（Sign Language Generation）分別涉及電腦視覺、自然語言處理、電腦圖學與手語文化等不同層面 \cite{bragg2019sign}。
+其中，手語理解方向通常以手語影像或人體動作序列作為輸入，並輸出手語詞彙 (gloss)、詞彙標籤或口語文字；
+相對地，手語生成或手語產生（Sign Language Production, SLP）通常以口語文字、手語詞彙 (gloss) 或其他語意表示作為輸入，
+並產生手語動作、骨架序列、虛擬人動畫或手語影片 \cite{rastgoo2024survey}。
+上述手語理解與手語生成兩類任務之輸入、處理目標與輸出形式可整理如圖~\ref{SLP_classfi} 所示。
+
+根據圖~\ref{SLP_classfi} 所示之分類，本研究屬於手語生成方向中的 avatar-based sign language production。具體而言，本研究的輸入為中文敘述句，
+前端模組將其轉換為較符合台灣自然手語語序之手語詞彙序列；後端模組則根據詞彙序列查找或擷取對應之手語動作資料，並透過虛擬人生成方法產生連續手語動畫。
+因此，本研究的核心挑戰不在於手語影像辨識，而在於如何將文字層級之自然手語詞彙序列與動作層級之虛擬人動畫生成流程銜接起來。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{ch2/SLP-classfi.jpeg}
+    \caption{手語處理任務之分類：手語理解方向與手語生成方向}
+    \label{SLP_classfi}
+\end{figure}
+
+\section{手語理解方向：由手語影像至文字}
+\label{sec:sign_to_text}
+
+\subsection{手語辨識與手語翻譯}
+\label{subsec:slr_slt}
+
+手語理解方向主要關注如何由手語影像或動作序列中推論語言內容。早期手語相關研究多聚焦於手語辨識（SLR），亦即從手語影像或動作資料中辨識出對應的手語詞彙或動作類別。
+然而，手語作為一種具有獨立語法與空間表達特性的自然語言，其翻譯問題不能簡化為逐詞辨識。
+手語翻譯（SLT）進一步要求系統將手語輸入轉換為口語文字句子，因此需要同時處理視覺動作理解、語序轉換與語意重組等問題。
+
+Camgoz 等人提出 Neural Sign Language Translation，將手語影片至口語文字的轉換形式化為 Neural Machine Translation 問題，
+並指出 SLT 不同於傳統手語辨識，因為其輸出目標為完整自然語言句子，而非僅是手語詞彙標籤 \cite{Camgoz_2018_CVPR}。
+其後，Camgoz 等人提出 Sign Language Transformers，以 Transformer 架構聯合處理連續手語辨識與手語翻譯，
+並引入 Connectionist Temporal Classification（CTC）作為 gloss-level supervision，使模型能在學習視覺時序特徵的同時，
+保留對手語詞彙序列的中介理解 \cite{Camgoz_2020_CVPR}。
+
+\subsection{Gloss-based 手語表示}
+\label{subsec:gloss_based_representation}
+
+Gloss 是手語研究中常見的文字化標記，用以標示手語影片中對應的手語詞彙或語義單位。Koller 等人指出，gloss 標註在手語資料集中具有重要地位，
+常被用於連續手語辨識與手語翻譯任務中，作為視覺動作與語言文字之間的中介監督訊號 \cite{koller2020quantitative}。
+在手語理解方向中，gloss 可協助模型從手語影像中學習語言單位；在手語生成方向中，gloss 則可作為文字與手語動作之間的橋接表示。
+
+對於本研究而言，gloss-based 表示的重要性在於它能將文字層級與動作層級分開處理。第一階段先將中文句子轉換為符合自然手語語序的詞彙序列，
+第二階段再根據該詞彙序列查找對應之手語動作資料。相較於直接由中文句子生成手語影片，此種分階段設計較適合資料量有限且需要可控動作串接的系統情境。
+
+\section{手語生成方向：由文字至虛擬人手語動畫}
+\label{sec:text_or_gloss_to_sign}
+
+相對於手語理解方向由手語影像推論文字或語義內容，手語生成方向則以口語文字、gloss 或其他語義表示作為輸入，並產生可被理解的手語表達。
+此類任務常稱為手語產生（Sign Language Production, SLP）或文字至手語生成（Text-to-Sign Generation），其輸出形式可包含 gloss 序列、二維或三維姿態序列、
+虛擬人動畫，甚至寫實手語影片 \cite{rastgoo2024survey,saunders2020progressivetransformers,kim2022sign,Saunders2022signingatscale}。
+由於口語文字與手語在語序、語法結構與非手部訊號表達上皆存在差異，文字至手語生成通常不宜被視為單純的逐字替換，而是需要同時處理語言轉換與動作生成兩個層面的問題。
+
+本研究屬於手語生成方向中的虛擬人手語動畫生成任務。整體流程可概略分為三個階段：首先將輸入中文句子轉換為較符合台灣自然手語語序的 gloss 或手語詞彙序列；
+其次根據 gloss 對應之手語影片與動作資料取得手語動作；最後將連續手語動作套用至虛擬人模型，以產生可視化的手語動畫。
+因此，本節依序回顧 Text-to-Gloss、Text-to-Pose 與 Avatar-based Sign Language Production 等相關技術。
+
+\subsection{Text-to-Gloss 與手語語序轉換}
+\label{subsec:text_to_gloss}
+
+在手語理解方向中，gloss 常作為手語影像至文字翻譯的中介監督訊號；
+在手語生成方向中，gloss 則可作為口語文字與手語動作之間的橋接表示，使系統能先處理語言層級的語序與語意轉換，
+再進一步生成手語動作或虛擬人動畫 \cite{koller2020quantitative,Camgoz_2020_CVPR}。
+
+Text-to-Gloss 的核心問題在於將口語文字句子轉換為符合手語語法、語序與表達習慣的 gloss 序列。以中文至台灣自然手語轉換為例，中文句子與台灣自然手語在詞序、語法結構、
+主題結構、語意省略與表達習慣上可能存在差異。因此，若僅依照中文詞序逐字對應手語詞彙，容易導致輸出結果不符合自然手語表達。
+相關研究通常會將此問題視為一種 text-to-text translation 任務，
+亦即由來源語言句子轉換為目標手語 gloss 或手語詞序 \cite{abdullah2025stateofthearttranslationtexttoglossusing,Chu2025SLT}。
+
+在本研究中，Text-to-Gloss 階段並非最終輸出，而是後續動作生成與虛擬人動畫生成的前置步驟。透過 gloss 作為中介表示，
+系統可將語言轉換問題與動作生成問題分開處理：前者關注中文句子如何轉換為自然手語詞序，後者則關注如何根據 gloss 對應出連續且自然的手語動作。
+此種分階段設計有助於在資料量有限的情況下提高系統的可控性，也能讓錯誤分析更容易區分是語言轉換錯誤或動作生成錯誤。
+
+基於上述背景，本小節進一步回顧三類與 Text-to-Gloss 轉換密切相關的技術。首先，Neural Machine Translation 與 Transformer 架構提供了序列至序列轉換的基礎方法；
+其次，多語言預訓練模型 mT5 可作為文字轉換任務的語言模型基礎；最後，中文自然語言處理工具可提供斷詞、詞性標註與句法分析等語言特徵，輔助模型掌握中文句子的結構資訊。
+
+% //////
+% 本研究之前端中文至自然手語轉換模組採用朱禹丞之碩士論文所提出之中文至自然手語翻譯系統 \cite{Chu2025SLT}。
+% 該研究以臺北市手語翻譯培訓教材作為資料來源，整理中文句子與自然手語詞彙序列之平行語料 \cite{signbook}，
+% 並訓練模型將中文輸入句子轉換為較符合台灣自然手語表達方式的詞彙順序。於本研究系統中，此模組負責將使用者輸入之中文敘述句轉換為手語詞彙序列，
+% 作為後續動作資料查找與虛擬人動畫生成之依據。
+% //////
+
+\subsubsection{Neural Machine Translation 與 Transformer 架構}
+\label{subsubsec:nmt_transformer}
+
+Neural Machine Translation（NMT）將翻譯視為序列至序列轉換問題。Sutskever 等人提出 sequence-to-sequence 架構，
+利用編碼器將輸入序列壓縮為向量表示，再由解碼器產生目標序列 \cite{sutskever2014sequence}。Bahdanau 等人進一步提出注意力機制（Attention Mechanism），
+使模型能在解碼過程中動態關注來源序列中不同位置的資訊，改善長句翻譯時固定長度向量難以保留完整語意的問題 \cite{bahdanau2016neuralmachinetranslationjointly}。
+
+其後，Vaswani 等人提出 Transformer 架構，以自注意力機制取代傳統循環式結構，使模型能直接建模序列中任意兩個位置之間的關係，
+並提升平行化訓練效率 \cite{transformer}。由於中文至自然手語 gloss 轉換可被視為 text-to-text translation 任務，
+Transformer 及其 encoder-decoder 架構適合用於建模中文句子與手語 gloss 序列之間的對應關係。
+
+然而，對本研究而言，Transformer 並不是主要貢獻本身，而是支撐 Text-to-Gloss 轉換的基礎模型架構。第二章中介紹 Transformer 的目的，
+是說明前端語言轉換模型如何將中文句子轉為手語詞序，並為後續由 gloss 對應至手語動作與虛擬人動畫建立語言層級的輸入基礎。
+
+\subsubsection{多語言預訓練模型與 mT5}
+\label{subsubsec:mt5}
+
+由於中文與手語之間存在語法與語意結構差異，單純依靠原始文字輸入可能不足以使模型有效掌握句子結構。
+因此，將自然語言處理（Natural Language Processing, NLP） \cite{jurafsky2025slp3}技術導入手語翻譯，可協助模型取得更明確的語法與語意資訊。
+
+近年自然語言處理研究中，預訓練語言模型已廣泛應用於機器翻譯、摘要、問答與文字生成等任務。T5 （Text-to-Text Transfer Transformer）將多種自然語言處理任務統一為 text-to-text 格式，
+使模型能以相同的輸入與輸出形式處理不同任務 \cite{raffel2023exploringlimitstransferlearning}。mT5（Multilingual T5）則進一步將 T5 擴展至多語環境，使用大規模多語言資料進行預訓練，
+使其能應用於多種語言的文字生成與轉換任務 \cite{xue2021mt5massivelymultilingualpretrained}。
+
+由於中文至台灣自然手語 gloss 轉換本質上可表述為「中文文字輸入、手語 gloss 輸出」的 text-to-text 任務，
+因此 mT5 這類多語 encoder-decoder 模型可作為前端轉換模型的基礎。相較於從零開始訓練序列轉換模型，使用預訓練模型有助於利用其既有語言表示能力，
+並在手語資料量有限的情況下降低訓練難度。
+
+需要注意的是，mT5 本身並不具備手語語法知識，也無法直接保證輸出結果符合台灣自然手語表達。因此，在本研究脈絡中，mT5 應被視為 Text-to-Gloss 的語言轉換骨幹，
+其實際效果仍取決於訓練資料品質、gloss 標註方式、語序轉換規則，以及後續動作資料是否能正確對應輸出 gloss。
+
+\subsubsection{中文自然語言處理工具於 Text-to-Gloss 之應用}
+\label{subsubsec:chinese_nlp_tools}
+
+中文句子缺乏明確的空白斷詞標記，因此在進行中文至手語 gloss 轉換前，常需要先進行斷詞、詞性標註或句法分析等前處理。
+CKIP Transformers 提供中文斷詞、詞性標註與命名實體辨識等功能，可協助系統取得中文句子的詞彙邊界與基本語法資訊\cite{ckiptransformers}。
+HanLP 則提供多語自然語言處理功能，包含斷詞、詞性標註、依存句法分析與成分句法分析等，可用於擷取句中詞彙之間的語法關係\cite{he-choi-2021-stem}。
+
+在 Text-to-Gloss 任務中，這些語言分析工具可作為輔助特徵來源。例如，詞性標註可協助判斷句中名詞、動詞與修飾語的位置；
+依存句法分析可描述主詞、受詞與謂語之間的依附關係；成分句法分析則可提供片語層級的結構資訊。對於中文至台灣自然手語轉換而言，
+這些語法資訊可協助模型處理語序調整、主題化結構與部分詞彙省略等問題\cite{tsay2004morphology,smith2005taiwan,Chu2025SLT}。
+
+不過，中文自然語言處理工具只能提供來源語言的語法分析，並不等同於手語語法轉換規則。因此，本研究在第二章中將其定位為 Text-to-Gloss 的輔助技術，
+而非手語生成的核心方法。其主要作用是強化前端語言轉換模型對中文句法結構的理解，後續仍需透過 gloss 對應與動作生成階段，才能產生完整的虛擬人手語動畫。
+
+\subsubsection{中文至台灣自然手語翻譯系統}
+\label{subsubsec:chu_slt_system}
+
+朱禹丞提出中文至台灣自然手語翻譯系統，將輸入中文句子視為來源序列，並以符合台灣自然手語表達習慣之 gloss sequence 作為目標輸出 \cite{Chu2025SLT}。
+該系統之訓練資料主要整理自《臺北市手語翻譯培訓教材》\cite{signbook,Chu2025SLT}，用以學習中文句子與台灣自然手語詞彙序列之對應關係。
+該研究比較 MarianMT、T5-Chinese 與 mT5-Base 等 encoder-decoder Transformer 模型後，以 mT5-Base 作為主要序列轉換模型 \cite{xue2021mt5massivelymultilingualpretrained,Chu2025SLT}。
+
+為提升模型對中文語法結構與語意關係的掌握，該系統使用 CKIP Transformers 進行中文斷詞與詞性標註，並使用 HanLP 取得依存句法與成分句法資訊。
+這些詞性、依存關係與句法層級資訊會與原始中文文本一同提供給翻譯模型，使模型生成 gloss sequence 時能參考中文句法結構 \cite{ckiptransformers,he-choi-2021-stem,Chu2025SLT}。
+模型產生初步 gloss 後，系統再透過 Text2Vec 與手語詞彙庫進行語意相似度比對，將輸出修正為詞彙庫中可對應之詞彙結果。
+該系統之整體流程如圖~\ref{fig:chu_slt_workflow} 所示。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{ch3/workflow.jpg}
+    \caption{朱禹丞中文至自然手語翻譯系統架構圖 \cite{Chu2025SLT}}
+    \label{fig:chu_slt_workflow}
+\end{figure}
+
+\subsubsection{手語詞彙與影片資料庫}
+\label{subsubsec:sign_vocab_database}
+
+除中文至自然手語翻譯模型外，朱禹丞之研究亦整合多個公開手語資源，建立包含手語詞彙、中文對應詞與手語示範影片之詞彙資料庫 \cite{Chu2025SLT}。
+依據其整理結果，資料庫共收錄 10,611 個包含影片的手語詞彙條目，資料來源與詞彙條目數如表~\ref{tab:sign_vocab_sources} 所示，
+內容範例如圖~\ref{fig:Sign_data_video} 所示。此處採用原研究之統計口徑，表中數量代表各來源所收錄的詞彙條目數，而非去除重複對應後的獨立影片數。
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.31\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{ch3/sign_data_video_Orange.jpg}
+        \caption{常用手語辭典~\cite{signbook_common}}
+        \label{fig:sign_vocab_common}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.31\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{ch3/sign_data_video_Teacher.jpg}
+        \caption{教保服務人員手語手冊~\cite{signbook_baby}}
+        \label{fig:sign_vocab_pro}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.31\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{ch3/sign_data_video_BBQ.jpg}
+        \caption{台灣手語線上辭典~\cite{signbook_Chung_Cheng}}
+        \label{fig:sign_vocab_academic}
+    \end{subfigure}
+
+    \caption[手語辭彙庫內容示意]{手語詞彙庫內容範例。圖 (a)、(b) 與 (c) 分別展示三個資料來源之詞彙與對應示範影片畫面。擷取自 \cite{Chu2025SLT}}
+    \label{fig:Sign_data_video}
+\end{figure}
+
+\begin{table}[H]
+    \centering
+    \caption{原研究手語詞彙與影片資料庫來源及詞彙條目數 \cite{Chu2025SLT}}
+    \label{tab:sign_vocab_sources}
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{lc}
+        \toprule
+        \textbf{資料來源} & \textbf{詞彙條目數} \\
+        \midrule
+        常用手語辭典（教育部） & 7,680 \\
+        教保服務人員手語手冊（教育部） & 1,002 \\
+        台灣手語線上辭典（中正大學） & 1,929 \\
+        \midrule
+        \textbf{總計} & \textbf{10,611} \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+整合多個手語資料來源時，「詞彙條目」與「影片檔案」並非一對一關係，其重複情形可分為兩類。
+第一類為多個中文同義詞、近義詞或異體詞共用同一支示範影片；此時索引中的詞彙條目數會高於唯一影片數。
+第二類為相同 gloss 同時出現在不同資料來源，且各來源各自提供一支示範影片；
+此時來源資料夾中的影片總數可能高於整併後索引實際採用的影片數。
+因此，各來源詞彙條目數、唯一影片路徑數與實體影片檔案數具有不同意義，不宜直接視為相同統計量。
+
+針對第二類跨來源重複，本研究優先選用「教保服務人員手語手冊」中的影片作為後續動作追蹤資料。
+此選擇並非判定其手語語義較為正確，而是基於影像品質與動作可觀測性的考量。EHM-Tracker 需由逐幀影像估計人體姿態、手部關節與臉部特徵；
+影片解析度、壓縮程度、人物大小、雙手是否清楚可見，以及動作過程是否受到遮擋，皆會影響關鍵點偵測與參數最佳化的穩定性。
+「教保服務人員手語手冊」影片之畫面與動作相對清楚，故在重複詞彙中優先採用，有助於降低追蹤誤差並提升後續虛擬人手語動畫的動作品質。
+上述整併規則及本研究實際使用之索引統計將於第~\ref{sec:sign_vocab_tracking_mapping} 節進一步說明。
+
+在原系統中，該資料庫一方面用於根據模型輸出 gloss 播放對應的手語示範影片，另一方面作為詞彙層級後處理之依據。
+當模型產生未收錄或非手語慣用詞彙時，系統可透過組合詞替換與語意相似度比對，將輸出修正為資料庫中可用之手語詞彙 \cite{Chu2025SLT}。
+此資料庫提供了由 gloss 連接至手語影片的詞彙層級基礎，也使後續系統能進一步將示範影片轉換為可驅動虛擬人的參數化動作資料。
+
+
+\subsection{Text-to-Pose 與手語動作生成}
+\label{subsec:text_to_pose}
+
+Text-to-Pose 方法的目標是將文字或 gloss 轉換為人體姿態序列，使手語表達可先以骨架或關鍵點形式表示。相較於直接生成影像，
+姿態序列是一種較結構化的中介表示，能明確描述手部、手臂、身體與臉部等部位的運動變化，因此常被用於手語生成任務中。
+Saunders 等人提出之 Progressive Transformers 即將 spoken language sentence 轉換為三維姿態序列，並以漸進式方式生成連續手語動作 \cite{saunders2020progressivetransformers}。
+Stoll 等人提出 Text2Sign，將 spoken language 至 sign video 的生成拆分為文字翻譯、動作生成與影像生成等子程序，
+顯示 SLP 並非單純逐字對應，而需同時處理語言轉換與視覺動作生成 \cite{stoll2020text2sign}。
+
+此類方法的優點是能避免直接合成影像所需之高維視覺細節，先以骨架或姿態表示手語動作，再進一步交由影像生成或 avatar animation module 呈現。
+然而，pose-based 方法亦存在限制。若僅輸出骨架或關鍵點，仍需後續方法將姿態轉換為可觀看的角色動畫或手語影片。
+此外，手語包含手部細節、臉部表情與上半身動作等多通道訊息 (multi-channel) ，若姿態表示不足，可能影響手語語意與自然度 \cite{rastgoo2024survey}。
+
+\subsection{Avatar-based Sign Language Production}
+\label{subsec:avatar_based_slp}
+
+Avatar-based SLP 的目標是將文字、gloss 或手語動作資料轉換為可驅動虛擬角色的動畫，使使用者能觀看由虛擬人呈現的手語表達。
+相較於直接生成真人手語影片，avatar-based 方法具有角色可重複使用、外觀可調整、動畫可控性較高等優點；但其挑戰在於如何產生自然且語意正確的手部、臉部與身體動作。
+
+為解決前段所述之手語「多通道訊息 (multi-channel)」同步與呈現的挑戰，Kim 等人提出的 avatar layering 方法將 sign language production 拆分為文字處理、gloss 轉換與 avatar animation generation，
+該研究提出將動畫資料封包拆分為左手、右手、臉部表情與身體等多個獨立通道，並透過圖層化 (Layering) 的機制來解決多通道動畫組合疊加的問題。
+此外，該研究也特別針對未見詞 (Out-of-Vocabulary, OOV) 或罕見詞問題，
+討論在 avatar-based SLP 中如何透過命名實體轉換 (Named Entity Transformation) 與指拼 (Fingerspelling) 的方式進行處理 \cite{kim2022sign}。
+此研究顯示 avatar-based SLP 適合以模組化方式串接語言轉換與動畫生成，與本研究所採用之中文句子、自然手語詞彙序列、手語動作資料與 GUAVA 虛擬人生成流程具有相似的系統思路。
+
+
+\section{虛擬人手語動畫生成相關技術}
+\label{sec:avatar_animation_generation}
+
+\subsection{人體參數模型：SMPL、SMPL-X、FLAME 與 MANO}
+\label{subsec:parametric_human_models}
+
+近年來，隨著虛擬人（Avatar）與數位人類（Digital Human）技術快速發展，如何建立可驅動之人體模型與高擬真角色動畫，已成為電腦視覺與電腦圖學的重要研究方向。
+人體參數模型（Parametric Human Model）可用低維度形狀參數與姿態參數描述人體外觀、骨架姿態與表面變形，使模型能根據輸入姿態生成對應之三維人體網格。
+
+為了以虛擬人呈現手語動作，系統需具備可控制人體姿態、手部動作與臉部表情的三維人體表示。SMPL（Skinned Multi-Person Linear Model）是一種常用之參數化人體模型，
+能以姿態與形狀參數表示三維人體網格 \cite{SMPL:2015}。然而，手語表達不僅依賴軀幹與手臂，也高度依賴手指細節與臉部表情，因此僅有身體模型並不足以完整表示手語。
+
+MANO 針對手部建立可控制之三維手部模型，能表示手指關節與手形變化 \cite{MANO:2017}。
+FLAME 則針對頭部與臉部表情建立參數化模型，可描述臉部形狀與表情變化 \cite{FLAME:2017}。
+SMPL-X 進一步整合身體、手部與臉部，提供可同時控制全身姿態、手指與臉部表情的統一人體模型 \cite{SMPL-X:2019}。
+因此，SMPL-X 及其相關模型特別適合用於手語動畫中上半身、手部與表情控制之建模。
+
+\subsection{3D Gaussian Splatting 與虛擬人表示}
+\label{subsec:3dgs_avatar}
+
+近年三維場景與虛擬人表示逐漸由傳統 mesh 或 NeRF-based 方法延伸至 3D Gaussian Splatting（3DGS）。
+NeRF 透過隱式神經場表示三維場景，能合成高品質新視角影像，但通常需要較高的訓練與渲染成本 \cite{mildenhall2020nerf}。
+Kerbl 等人提出 3D Gaussian Splatting，以顯式高斯點表示三維場景，並透過可微分 splatting 進行即時等級的新視角渲染，提升渲染效率與畫面品質 \cite{kerbl3Dgaussians}。
+
+在虛擬人物建模方面，Gaussian Avatar 與相關方法將 3DGS 應用於人體外觀建模，
+使系統能在保持外觀細節的同時支援姿態控制與快速渲染 \cite{hu2024gaussianavatar,moon2024exavatar}。
+這類方法提供了以 Gaussian 表示虛擬人外觀並透過人體模型進行控制的技術基礎，也與 GUAVA 所採用之上半身 3D Gaussian Avatar 概念相關。
+
+\subsection{GUAVA 與上半身虛擬人重演}
+\label{subsec:guava}
+
+GUAVA（Generalizable Upper Body 3D Gaussian Avatar）是一種針對上半身虛擬人重建與動畫生成所設計的方法，
+其目標是由單張人物影像快速重建可動畫化之上半身 3D Gaussian Avatar，並支援姿態、表情與手部動作控制 \cite{zhang2025guava}。
+相較於需要針對單一人物進行長時間最佳化的 avatar 方法，GUAVA 採用 generalizable 與 feed-forward 的設計，使系統能以較短時間產生可驅動之上半身虛擬人表示。
+
+GUAVA 的核心設計之一是提出 Expressive Human Model（EHM），以改善單純使用 SMPL-X 時在細緻臉部表情與上半身表達上的限制。
+GUAVA 以 SMPL-X 作為人體結構與骨架的基礎，使用其體型、身體姿態與左右手姿態參數描述人體動作；
+EHM 則在此基礎上結合更細緻的 FLAME 臉部表示，並加入頭部與手部尺度、關節偏移等可調整參數，
+使虛擬人能更完整地接收身體姿態、手部動作與臉部表情資訊。
+此特性對手語動畫生成尤其重要，因為手語不僅依賴雙手軌跡，也包含手形、臉部表情與上半身姿態等多通道訊息。
+
+EHM-Tracker 是與 GUAVA 搭配使用的人體追蹤模組，其目的是將人物照片或影片影格轉換為可供 EHM 與 GUAVA 使用的參數化表示 \cite{zhang2025guava}。
+追蹤流程首先對輸入影像進行人體、頭部與左右手特徵擷取，並利用 DWPose 取得人體與手部之二維關鍵點及其信心分數 \cite{yang2023dwpose}。
+系統接著估計初始 EHM/SMPL-X 身體與手部姿態參數，以及 FLAME 臉部參數，再根據目前參數產生三維人體關節與網格。
+
+為使三維人體與原始影像對齊，EHM-Tracker 會將 EHM/SMPL-X 三維關節投影回二維影像平面，並與 DWPose 偵測之二維關鍵點比較。
+其最佳化目標包含二維關鍵點對齊誤差、頭部與手部三維參考誤差、姿態與形狀先驗限制，以及相鄰影格之動作平滑限制，可概略表示為：
+
+\begin{equation}
+    \mathcal{L}_{\text{total}}
+    =
+    \mathcal{L}_{\text{3D}}
+    + \mathcal{L}_{\text{2D}}
+    + \mathcal{L}_{\text{prior}}
+    + \mathcal{L}_{\text{motion}}.
+    \label{eq:ehm_tracker_total_loss}
+\end{equation}
+
+在每一個 optimization step 中，系統會進行一次三維人體產生與二維投影、損失計算、反向傳播與參數更新；
+因此，最佳化步數代表此更新流程的重複次數，而非影片影格數或模型訓練回合數。
+% 較多的最佳化步數可使參數有更多機會接近可靠的影像觀測，但當手部離開畫面、遭到遮擋或關鍵點信心度偏低時，有效的二維約束較少，
+% 持續更新不一定能改善追蹤品質，亦可能使手部位置產生偏移。
+完成最佳化後，Tracker 會輸出逐影格的身體姿態、左右手姿態、臉部表情與相關尺度參數，作為後續 GUAVA avatar reconstruction 與 animation rendering 之輸入。
+
+如圖~\ref{fig:guava_pipeline} 所示，GUAVA 流程可分為 EHM tracking、上半身 Gaussian avatar 重建，以及動畫驅動與渲染三個主要階段。
+首先，系統由 source image 與 target image 估計人體、手部與臉部參數；接著，根據影像特徵與 EHM 表示建立 canonical space 中的上半身 Gaussians；最後，再依據目標姿態將 avatar 變形至 pose space，並經由 splatting 與 refiner 產生輸出影像。
+此流程使 GUAVA 能同時保留人物外觀並支援姿態、手部與表情控制。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.95\textwidth]{figures/ch2/guava_pipeline.png}
+    \caption{GUAVA 方法流程示意圖。GUAVA 先透過 EHM tracking 取得 source image 與 target image 之人體、手部與臉部參數，再由影像特徵與 EHM 表示重建上半身 3D Gaussian avatar，最後依據目標姿態進行動畫驅動與渲染。圖取自 \cite{zhang2025guava}。}
+    \label{fig:guava_pipeline}
+\end{figure}
+
+在本研究中，GUAVA 作為後端虛擬人生成與重演模組。前端模型產生自然手語詞彙序列後，
+系統根據詞彙序列取得對應之手語動作資料，再將動作轉換為可驅動 GUAVA 之姿態與表情參數，使虛擬人產生連續手語動畫。
+其中，EHM-Tracker 主要用於手語示範影片與角色來源影像之前處理，將原始影像資料轉換為 GUAVA 可讀取之人體、手部與臉部追蹤參數；GUAVA avatar rendering 則負責根據這些參數產生最終虛擬人動畫。
+因此，GUAVA 在本研究中的角色是將語言層級輸出具體化為可視覺呈現的虛擬人手語表達。
+
+\section{小結}
+\label{sec:related_work_summary}
+
+本章首先依輸入與輸出方向整理手語處理任務，將相關研究區分為手語理解與手語生成兩大方向。手語理解方向包含 SLR 與 SLT，主要處理由手語影像至 gloss 或口語文字之轉換；
+手語生成方向則包含 SLP 與 text-to-sign generation，主要處理由口語文字或 gloss 至手語動作、虛擬人動畫或影片之生成。
+根據此分類，本研究可定位為手語生成方向中的 avatar-based sign language production。
+
+為了更清晰地呈現本研究之技術定位與前人研究的發展脈絡，表 \ref{tab:slp_summary} 統整了近年深度學習於手語處理與虛擬人生成領域之核心模型與其優缺點。
+從早期的手語影像翻譯（如 Camgoz 等人），發展至以姿態作為中介的手語生成（如 Saunders 等人、Stoll 等人），
+再到近期著重於解決多通道同步與未見詞挑戰的虛擬人圖層化技術（如 Kim 等人），以及具備高擬真度與高控制性的 3DGS 虛擬人生成技術（如 Zhang 等人）。
+
+% 這裡可以插入上面為您整理的表格的 LaTeX 語法 (Table 2.1)
+\begin{table}[htbp]
+\centering
+\caption{深度學習手語理解與手語生成模型總結}
+\label{tab:slp_summary}
+\renewcommand{\arraystretch}{1.35}
+\small
+\begin{tabularx}{\textwidth}{
+    >{\centering\arraybackslash}p{0.08\textwidth}
+    >{\centering\arraybackslash}p{0.13\textwidth}
+    >{\centering\arraybackslash}p{0.18\textwidth}
+    >{\centering\arraybackslash}p{0.15\textwidth}
+    X
+}
+\toprule
+年份 & 文獻 & 方法特徵 & 輸入模態 & 描述 \\
+\midrule
+
+2018 &
+Camgoz 等人 \cite{Camgoz_2018_CVPR} &
+Neural Machine Translation &
+手語影片 &
+\textbf{優點：} 首次將手語影片至口語文字的轉換形式化為 Neural Machine Translation 問題，使模型能輸出完整的自然語言句子，而非僅辨識單一手語詞彙標籤。 \\
+
+\midrule
+
+2020 &
+Camgoz 等人 \cite{Camgoz_2020_CVPR} &
+Transformer、CTC、gloss-level supervision &
+手語影片 &
+\textbf{優點：} 結合 Transformer 架構聯合處理連續手語辨識與手語翻譯，並引入 CTC 作為 gloss-level 監督訊號，使模型在學習視覺時序特徵時，能保留對手語詞彙序列的中介理解。 \\
+
+\midrule
+
+2020 &
+Stoll 等人 \cite{stoll2020text2sign} &
+Text-to-Pose、Neural Machine Translation、影像生成 &
+口語文字 &
+\textbf{優點：} 將手語生成任務拆分為文字翻譯、動作生成與影像生成等多個子程序，說明文字至手語生成並非單純逐字對應，而需同時處理語言轉換與視覺動作生成。 \\
+
+\midrule
+
+2020 &
+Saunders 等人 \cite{saunders2020progressivetransformers} &
+Text-to-Pose、Progressive Transformer &
+口語文字 &
+\textbf{優點：} 將口語句子漸進式轉換為連續三維姿態序列，可避免直接合成影像所需處理的高維視覺細節。
+\newline
+\textbf{限制：} 僅輸出骨架或姿態序列仍需後續轉換，才能成為可觀看的動畫或影片；若姿態表示不足，可能流失手部細節與臉部表情等多通道訊息，影響手語自然度。 \\
+
+\midrule
+
+2022 &
+Kim 等人 \cite{kim2022sign} &
+Avatar-based SLP、Layering &
+文字 &
+\textbf{優點：} 提出圖層化機制，將左手、右手、身體與臉部表情等動畫通道分開處理，有助於解決多通道動畫組合與疊加問題；並透過命名實體轉換與指拼處理未見詞與罕見詞問題。 \\
+
+\midrule
+
+2025 &
+Zhang 等人 \cite{zhang2025guava} &
+3D Gaussian Avatar、EHM &
+單張影像、動作參數 &
+\textbf{優點：} 以 feed-forward 設計由單張影像快速重建可動畫化的上半身 3D 虛擬人。其 EHM 模型能整合身體、手部與臉部表情參數，有助於呈現手語所需的多通道特徵。 \\
+
+\bottomrule
+\end{tabularx}
+\end{table}
+
+從表 \ref{tab:slp_summary} 中前人方法的限制可以看出，單純的骨架生成容易流失多通道訊息，而傳統虛擬人方法則面臨多通道組合疊加與系統擴充性的挑戰。
+
+
+因此，在語言轉換層面，本研究以前端中文至自然手語詞彙序列轉換模型為基礎，利用 Transformer 與 mT5 等 text-to-text translation 架構處理中文與台灣自然手語之語序差異。
+在動作生成層面，本研究進一步將詞彙序列對應至手語動作資料，並透過 GUAVA 進行上半身虛擬人重建與動畫渲染。
+因此，本研究的核心挑戰不僅在於中文至自然手語詞彙序列之轉換，也包含手語動作片段擷取、串接與平滑處理，使輸出結果能形成較連續且自然的虛擬人手語動畫。
+
+
+
+% 因此，在語言轉換層面，本研究以前端中文至自然手語詞彙序列轉換模型為基礎，利用 Transformer 與 mT5 等 text-to-text translation 架構處理中文與台灣自然手語之語序差異；
+% 在動作生成層面，本研究進一步將詞彙序列對應至手語動作資料，並透過上述提到的 GUAVA 模型進行上半身虛擬人重建與動畫渲染。
+% 本研究結合「自然手語詞彙轉換」與「GUAVA 虛擬人生成流程」的系統設計，正是為了解決過去方法在多通道同步性與自然度上的限制，使輸出結果能形成更連續且真實的虛擬人手語動畫。
+
+
+\pagebreak
+
+\end{document}

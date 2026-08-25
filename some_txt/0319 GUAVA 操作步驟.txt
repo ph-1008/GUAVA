@@ -1,0 +1,83 @@
+0319 GUAVA 操作步驟
+
+第一步 追蹤原始影片 產生完等影片的.pkl等
+~/GUAVA/EHM-Tracker
+python tracking_video.py \
+    --in_root assets/examples/working \
+    --output_dir results/working  \
+    --save_vis_video --save_images \
+    --optimization_steps 100 \
+    --check_hand_score 0.0 -n 1 -v 1
+
+~/GUAVA/EHM-Tracker
+python tracking_video.py \
+    --in_root home/paohan/GUAVA/EHM-Tracker/assets/run_step1000_1_2_hands_comparison/1_hand \
+    --output_dir home/paohan/GUAVA/EHM-Tracker/Sign_dataset/tw_sign_dataset/run_step1000_1_2_hands_comparison_tracked/1_hand  \
+    --save_vis_video --save_images \
+    --optimization_steps 1000 \
+    --check_hand_score 0.0 -n 1 -v 1
+
+python tracking_video.py \
+    --in_root home/paohan/GUAVA/EHM-Tracker/assets/run_step1000_1_2_hands_comparison/2_hands \
+    --output_dir home/paohan/GUAVA/EHM-Tracker/Sign_dataset/tw_sign_dataset/run_step1000_1_2_hands_comparison_tracked/2_hands  \
+    --save_vis_video --save_images \
+    --optimization_steps 1000 \
+    --check_hand_score 0.0 -n 1 -v 1
+
+----------------------------------------------
+第二步  串接完成
+成功處理 5 個視頻
+√原始總幀數:381幀
+√擷取內容幀:238幀(62.5%)
+✔生成過渡幀:60幀
+✔最終總幀數:298 幀(9.93秒@30fps)
+√參數平滑:已應用(強化版+驗證)
+√輸出目錄:/home/paohan/GUAVA/outputs/concatenated smoothed 0318 working
+~/GUAVA
+python tracking_concatenation_final_3.py    or
+python tracking_concatenation_final_4.py (檔案中要改tracked_dirs、output_dirs
+
+----------------------------------------------
+第三步 .pkl渲染成虛擬人物形象
+~/GUAVA
+cd /home/paohan/GUAVA && PYTHONPATH=/home/paohan/GUAVA:$PYTHONPATH python main/test.py   -d '0' -m assets/GUAVA -s outputs/concatenated_smoothed_0318_working   --data_path /home/paohan/GUAVA/outputs/concatenated_smoothed_0318_working   --source_data_path /home/paohan/GUAVA/outputs/app/tracked_source_image/Gemini_Generated_Image_kzne4skzne4skzne   --skip_self_act --render_cross_act
+
+~/GUAVA
+cd /home/paohan/GUAVA && PYTHONPATH=/home/paohan/GUAVA:$PYTHONPATH python main/test.py   -d '0' -m assets/GUAVA -s /home/paohan/GUAVA/outputs_2   --data_path /home/paohan/GUAVA/EHM-Tracker/Sign_dataset/tw_sign_dataset/sign_net_tracked/rieiV5Ba98c   --source_data_path /home/paohan/GUAVA/outputs/app/tracked_source_image/Gemini_Generated_Image_kzne4skzne4skzne   --skip_self_act --render_cross_act
+
+1. -d (Device / GPU ID)
+意思： 指定運算的裝置（Device）。
+在此處的意義： -d ' 0 ' 通常表示使用編號為 0 的顯示卡（GPU）進行運算。如果是 -d -1，有時代表使用 CPU。
+2. -m (Model Path)
+意思： 指定模型（Model）的路徑。
+在此處的意義： -m assets/GUAVA 表示程式要載入位於 assets/GUAVA 這個資料夾（或檔案）中的模型權重或設定檔。
+3. -s (Save / Silent / Scale / Skip)
+這個參數在沒有後續數值的情況下，通常是一個「開關」（Flag），具體意義取決於你使用的軟體，最常見的有幾種可能：
+Save（儲存）： 執行完後自動儲存結果（例如圖片或影片）。
+Silent（靜默模式）： 執行時不顯示詳細的日誌訊息（Log）。
+Scale（縮放）： 如果是影像處理工具，有時代表特定的縮放倍率（但通常後面會接數字）。
+Source（來源）： 指定輸入源（但通常後面會接路徑）。
+
+-----------------------------------------------
+禹成code
+python run
+"D:\碩二\paper\114朱禹丞畢業光碟\114朱禹丞畢業光碟\paper\CODE\GUI\gui.py"
+
+-----------------------------------------------
+資料集                   原始                去除重複後
+TWTSL                   2418                    2852
+全國教保資訊網            1003                    1010
+常用手語辭典              7990 (有問題:07550前    \ 6780
+=                       11411                  10642
+
+merged_labels 10647 
+06421
+
+------------------------------------------------
+在生成的影片看得出平滑方法有明顯改善手部抖動的是這個詞
+"/home/paohan/GUAVA/experiment/ui_20260614_183917_是"  這是未使用平滑
+"/home/paohan/GUAVA/experiment/ui_20260614_184244_是" 這是有使用平滑
+
+------------------------------------------------
+分享網址指令
+/home/paohan/anaconda3/envs/GUAVA/bin/python -u app.py --share --port 8188

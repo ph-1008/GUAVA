@@ -1,0 +1,254 @@
+\documentclass[class=NCU_thesis, crop=false]{standalone}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{pdflscape}
+\usepackage{xcolor}
+\providecommand{\metricmark}[1]{}
+\renewcommand{\metricmark}[1]{\textcolor{red}{\textbf{#1}}}
+\providecommand{\trackingword}[1]{}
+\renewcommand{\trackingword}[1]{\colorbox{yellow}{\strut\textbf{#1}}}
+\providecommand{\trackingrow}[6]{}
+\renewcommand{\trackingrow}[6]{%
+    \begin{minipage}[t]{0.48\linewidth}
+        \centering
+        \trackingword{#1}\\[-0.2em]
+        {\footnotesize 100-step}\\[-0.2em]
+        \includegraphics[width=\linewidth,height=0.105\textheight,keepaspectratio]{#2}\\[-0.1em]
+        {\footnotesize 1000-step}\\[-0.2em]
+        \includegraphics[width=\linewidth,height=0.105\textheight,keepaspectratio]{#3}
+    \end{minipage}%
+    \hfill
+    \begin{minipage}[t]{0.48\linewidth}
+        \centering
+        \trackingword{#4}\\[-0.2em]
+        {\footnotesize 100-step}\\[-0.2em]
+        \includegraphics[width=\linewidth,height=0.105\textheight,keepaspectratio]{#5}\\[-0.1em]
+        {\footnotesize 1000-step}\\[-0.2em]
+        \includegraphics[width=\linewidth,height=0.105\textheight,keepaspectratio]{#6}
+    \end{minipage}\\[-0.1em]
+    \rule{\linewidth}{0.4pt}\\[0.35em]%
+}
+\begin{document}
+
+\clearpage
+\phantomsection
+\addcontentsline{toc}{chapter}{附件二：EHM-Tracker 最佳化步數比較之樣本詳細指標}
+\chapter*{附件二：EHM-Tracker 最佳化步數比較之樣本詳細指標}
+\label{appendix:tracking_step}
+
+本附件列出第~\ref{sec:exp_tracking_steps} 節所使用之代表性樣本詳細數據。
+% 中文詞彙依據 \texttt{merged\_labels\_tracked.json} 由追蹤結果檔名反查而得；若同一檔名對應多個中文詞彙，表中列出第一個對應詞彙。
+表中 reprojection error 單位為 pixel，數值越低越好；PCK 數值越高越好。
+$\Delta$ error 定義為 step1000 減 step100，因此正值代表 step1000 誤差較大，負值代表 step1000 誤差較小。
+
+\begin{landscape}
+\scriptsize
+\begin{longtable}{p{0.08\linewidth}@{\hspace{0.7em}}p{0.08\linewidth}@{\hspace{0.7em}}r r r r r r r r}
+\caption{單手樣本中離開畫面手與整體手部之 step100/step1000 指標比較}
+\label{tab:appendix_tracking_step_one_hand}\\
+\toprule
+類型 & 中文詞彙 & \multicolumn{2}{c}{有效關鍵點數} & \multicolumn{3}{c}{左手 reprojection error (px)} & \multicolumn{3}{c}{整體手部指標（100-step$\rightarrow$1000-step）} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+ & & 左手 & 右手 & 100-step & 1000-step & $\Delta$ & Hand error & PCK@0.05 & PCK@0.10 \\
+\midrule
+\endfirsthead
+\caption[]{單手樣本中離開畫面手與整體手部之 step100/step1000 指標比較}\\
+\toprule
+類型 & 中文詞彙 & \multicolumn{2}{c}{有效關鍵點數} & \multicolumn{3}{c}{左手 reprojection error (px)} & \multicolumn{3}{c}{整體手部指標（100-step$\rightarrow$1000-step）} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+ & & 左手 & 右手 & 100-step & 1000-step & $\Delta$ & Hand error & PCK@0.05 & PCK@0.10 \\
+\midrule
+\endhead
+\midrule
+\multicolumn{10}{r}{續下頁} \\
+\endfoot
+\bottomrule
+\endlastfoot
+量化風險 & 愚笨 & 7 & 824 & \metricmark{131.34} & 386.18 & \metricmark{+254.84} & 10.69$\rightarrow$8.51 & 0.526$\rightarrow$0.759 & 0.764$\rightarrow$0.870 \\
+量化風險 & 頑固 & 412 & 633 & \metricmark{44.00} & 79.17 & \metricmark{+35.17} & 29.38$\rightarrow$40.17 & 0.588$\rightarrow$0.710 & 0.856$\rightarrow$0.924 \\
+量化風險 & 叫老師 & 158 & 1907 & \metricmark{53.77} & 170.18 & \metricmark{+116.41} & 16.12$\rightarrow$19.10 & 0.748$\rightarrow$0.868 & 0.946$\rightarrow$0.956 \\
+量化風險 & 難過 & 153 & 1484 & \metricmark{29.47} & 76.65 & \metricmark{+47.18} & 16.95$\rightarrow$11.65 & 0.573$\rightarrow$0.874 & 0.804$\rightarrow$0.966 \\
+量化風險 & 害怕 & 90 & 1658 & \metricmark{27.28} & 49.30 & \metricmark{+22.02} & 9.07$\rightarrow$6.08 & 0.769$\rightarrow$0.938 & 0.938$\rightarrow$0.986 \\
+量化風險 & 帽子 & 64 & 1455 & \metricmark{76.32} & 91.28 & \metricmark{+14.96} & 13.19$\rightarrow$11.01 & 0.485$\rightarrow$0.674 & 0.755$\rightarrow$0.868 \\
+量化風險 & 可以 & 49 & 982 & \metricmark{72.55} & 307.28 & \metricmark{+234.73} & 22.30$\rightarrow$22.84 & 0.610$\rightarrow$0.777 & 0.811$\rightarrow$0.882 \\
+量化風險 & 找 & 67 & 1146 & \metricmark{64.77} & 194.49 & \metricmark{+129.72} & 16.27$\rightarrow$17.59 & 0.623$\rightarrow$0.763 & 0.797$\rightarrow$0.871 \\
+視覺風險 & 一級棒 & 42 & 447 & 47.58 & 16.63 & -30.95 & 32.77$\rightarrow$11.14 & 0.151$\rightarrow$0.544 & 0.389$\rightarrow$0.787 \\
+視覺風險 & 寂寞 & 507 & 1108 & 23.53 & 14.76 & -8.77 & 18.65$\rightarrow$8.57 & 0.326$\rightarrow$0.679 & 0.556$\rightarrow$0.913 \\
+\end{longtable}
+\normalsize
+\end{landscape}
+
+由表~\ref{tab:appendix_tracking_step_one_hand} 可觀察到，單手樣本中嚴格符合「step1000 之離開畫面左手 reprojection error 增加」者共有八例，表中以粗體紅字標示。
+其共同特徵是左手有效關鍵點明顯少於右手，表示左手在偵測上較不穩定或較接近離開畫面狀態。
+此外，部分視覺風險案例雖然在量化指標上呈現 step1000 較佳，例如整體 hand error 下降或 PCK 上升，但同幀可視化結果仍可觀察到 step1000 將低可信度或畫面外手部錯誤拉回人體附近的現象。
+因此，reprojection error 與 PCK 在此僅能反映與 DWPose 偵測點的一致性，不能完全取代人工視覺檢查。
+本研究因此不將結論寫成「單手樣本皆不適合 step1000」，而是指出較長最佳化在低可信度手部上具有不穩定與誤追蹤風險。
+
+為輔助說明量化指標與視覺追蹤品質之差異，圖~\ref{fig:appendix_tracking_step_one_hand_visual} 列出上述 10 個代表性單手詞彙於相同影格下之 100-step 與 1000-step 追蹤結果對照。
+此圖用以觀察低可信度或畫面外手部是否被較長最佳化步數錯誤拉回人體附近，作為量化結果之外的視覺佐證。
+
+\begin{table}[htbp]
+\centering
+\caption{EHM-Tracker 追蹤可視化圖中各色點之意義}
+\label{tab:appendix_tracking_visual_keypoint_colors}
+\begin{tabular}{lll}
+\toprule
+顏色 & 代表內容 & 說明 \\
+\midrule
+綠色 & DWPose 二維關鍵點 & 作為 reprojection error 與 PCK 計算時的 pseudo ground truth \\
+紅色 & 模型投影二維關鍵點 & EHM/SMPL-X 追蹤結果投影至影像平面後的關鍵點 \\
+藍色 & 額外模型參考點 & 包含臉部 203 點與手部三維 prior joints 之投影結果 \\
+紫紅色 & 三維頂點投影 & 頭部與手部 selected mesh vertices 投影至影像平面後的結果 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[p]
+\vspace*{-0.08\textheight}
+\centering
+\scriptsize
+\trackingrow
+    {愚笨}
+    {figures/appendix2/1_hand/stupid_a_step100.png}
+    {figures/appendix2/1_hand/stupid_a_step1000.png}
+    {帽子}
+    {figures/appendix2/1_hand/hat_step100.png}
+    {figures/appendix2/1_hand/hat_step1000.png}
+\trackingrow
+    {頑固}
+    {figures/appendix2/1_hand/stubborn_a_step100.png}
+    {figures/appendix2/1_hand/stubborn_a_step1000.png}
+    {可以}
+    {figures/appendix2/1_hand/can_step100.png}
+    {figures/appendix2/1_hand/can_step1000.png}
+\trackingrow
+    {叫老師}
+    {figures/appendix2/1_hand/call_teacher_step100.png}
+    {figures/appendix2/1_hand/call_teacher_step1000.png}
+    {找}
+    {figures/appendix2/1_hand/find_step100.png}
+    {figures/appendix2/1_hand/find_step1000.png}
+\caption{單手代表性詞彙於相同影格下之 100-step 與 1000-step 追蹤結果比較。每張追蹤結果影像皆由左、中、右三個畫面組成：左圖為原始影片影格及二維關鍵點對齊結果，中圖為 EHM/SMPL-X 三維人體模型重建結果，右圖為模型投影回原始影像後之疊合結果；各色點意義如表~\ref{tab:appendix_tracking_visual_keypoint_colors} 所示。此圖用以輔助說明量化指標與視覺追蹤品質之差異；單手樣本可觀察低可信度或畫面外手部是否被較長最佳化步數錯誤拉回人體附近。}
+\label{fig:appendix_tracking_step_one_hand_visual}
+\end{figure}
+
+\begin{figure}[p]
+\ContinuedFloat
+\vspace*{-0.08\textheight}
+\centering
+\scriptsize
+\trackingrow
+    {難過}
+    {figures/appendix2/1_hand/sad_step100.png}
+    {figures/appendix2/1_hand/sad_step1000.png}
+    {一級棒}
+    {figures/appendix2/1_hand/superlative_step100.png}
+    {figures/appendix2/1_hand/superlative_step1000.png}
+\trackingrow
+    {害怕}
+    {figures/appendix2/1_hand/afraid_step100.png}
+    {figures/appendix2/1_hand/afraid_step1000.png}
+    {寂寞}
+    {figures/appendix2/1_hand/lonely_step100.png}
+    {figures/appendix2/1_hand/lonely_step1000.png}
+\caption[]{單手代表性詞彙於相同影格下之 100-step 與 1000-step 追蹤結果比較（續）。圖中左、中、右畫面之定義同圖~\ref{fig:appendix_tracking_step_one_hand_visual}，各色點意義如表~\ref{tab:appendix_tracking_visual_keypoint_colors} 所示。}
+\end{figure}
+
+\begin{landscape}
+\scriptsize
+\begin{longtable}{p{0.14\linewidth} r r r r r r r r r}
+\caption{雙手樣本中 step1000 穩定改善之代表性指標}
+\label{tab:appendix_tracking_step_two_hands}\\
+\toprule
+中文詞彙 & \multicolumn{3}{c}{Hand reprojection error (px)} & \multicolumn{3}{c}{Hand PCK@0.05} & \multicolumn{3}{c}{Hand PCK@0.10} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+& 100-step & 1000-step & $\Delta$ & 100-step & 1000-step & $\Delta$ & 100-step & 1000-step & $\Delta$ \\
+\midrule
+\endfirsthead
+\caption[]{雙手樣本中 step1000 穩定改善之代表性指標}\\
+\toprule
+中文詞彙 & \multicolumn{3}{c}{Hand reprojection error (px)} & \multicolumn{3}{c}{Hand PCK@0.05} & \multicolumn{3}{c}{Hand PCK@0.10} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+& 100-step & 1000-step & $\Delta$ & 100-step & 1000-step & $\Delta$ & 100-step & 1000-step & $\Delta$ \\
+\midrule
+\endhead
+\midrule
+\multicolumn{10}{r}{續下頁} \\
+\endfoot
+\bottomrule
+\endlastfoot
+行動 & 15.79 & \metricmark{11.28} & \metricmark{-4.51} & 0.551 & \metricmark{0.710} & \metricmark{+0.159} & 0.838 & \metricmark{0.934} & \metricmark{+0.096} \\
+影響 & 16.49 & \metricmark{9.55} & \metricmark{-6.94} & 0.655 & \metricmark{0.826} & \metricmark{+0.171} & 0.901 & \metricmark{0.967} & \metricmark{+0.066} \\
+排行老么 & 18.06 & \metricmark{13.88} & \metricmark{-4.18} & 0.642 & \metricmark{0.709} & \metricmark{+0.067} & 0.909 & \metricmark{0.936} & \metricmark{+0.026} \\
+摺 & 10.23 & \metricmark{6.15} & \metricmark{-4.08} & 0.790 & \metricmark{0.911} & \metricmark{+0.122} & 0.942 & \metricmark{0.994} & \metricmark{+0.051} \\
+蜜蜂 & 10.67 & \metricmark{6.12} & \metricmark{-4.54} & 0.868 & \metricmark{0.951} & \metricmark{+0.082} & 0.978 & \metricmark{0.992} & \metricmark{+0.014} \\
+怎麼(做) & 8.53 & \metricmark{4.86} & \metricmark{-3.67} & 0.684 & \metricmark{0.883} & \metricmark{+0.199} & 0.954 & \metricmark{0.988} & \metricmark{+0.034} \\
+男生 & 6.38 & \metricmark{3.57} & \metricmark{-2.81} & 0.860 & \metricmark{0.951} & \metricmark{+0.091} & 0.994 & \metricmark{0.999} & \metricmark{+0.006} \\
+刀叉 & 11.92 & \metricmark{5.31} & \metricmark{-6.61} & 0.861 & \metricmark{0.960} & \metricmark{+0.099} & 0.975 & \metricmark{0.997} & \metricmark{+0.021} \\
+臨床 & 18.17 & \metricmark{10.81} & \metricmark{-7.37} & 0.431 & \metricmark{0.655} & \metricmark{+0.224} & 0.839 & \metricmark{0.947} & \metricmark{+0.109} \\
+興奮 & 10.94 & \metricmark{5.61} & \metricmark{-5.34} & 0.864 & \metricmark{0.977} & \metricmark{+0.113} & 0.969 & \metricmark{0.990} & \metricmark{+0.022} \\
+\end{longtable}
+\normalsize
+\end{landscape}
+
+表~\ref{tab:appendix_tracking_step_two_hands} 顯示，在雙手可見的 10 個樣本中，step1000 對手部 reprojection error 與 PCK 均呈現一致改善；然而部分樣本之改善幅度有限，表示 1000-step 的優勢主要在於追蹤結果較穩定，而非所有樣本皆有大幅提升。
+
+為對照單手樣本之誤追蹤風險，圖~\ref{fig:appendix_tracking_step_two_hands_visual} 列出上述 10 個代表性雙手詞彙於相同影格下之 100-step 與 1000-step 追蹤結果對照。
+雙手樣本中兩手多數時間皆有可用偵測點，且由圖中可見不論 100-step 或 1000-step，大部分樣本皆能追蹤到雙手位置。
+因此，此圖主要用以輔助觀察 1000-step 是否帶來更穩定的手部貼合，而非強調畫面外手部被錯誤拉回的問題。
+
+\begin{figure}[!htbp]
+\centering
+\scriptsize
+\trackingrow
+    {行動}
+    {figures/appendix2/2_hands/action_step100.png}
+    {figures/appendix2/2_hands/action_step1000.png}
+    {怎麼(做)}
+    {figures/appendix2/2_hands/how_step100.png}
+    {figures/appendix2/2_hands/how_step1000.png}
+\trackingrow
+    {影響}
+    {figures/appendix2/2_hands/affect_step100.png}
+    {figures/appendix2/2_hands/affect_step1000.png}
+    {男生}
+    {figures/appendix2/2_hands/male_step100.png}
+    {figures/appendix2/2_hands/male_step1000.png}
+\caption{雙手代表性詞彙於相同影格下之 100-step 與 1000-step 追蹤結果比較。每張追蹤結果影像皆由左、中、右三個畫面組成：左圖為原始影片影格及二維關鍵點對齊結果，中圖為 EHM/SMPL-X 三維人體模型重建結果，右圖為模型投影回原始影像後之疊合結果；各色點意義如表~\ref{tab:appendix_tracking_visual_keypoint_colors} 所示。此圖用以輔助說明雙手樣本中 1000-step 在 reprojection error 與 PCK 上之穩定改善，並觀察其視覺追蹤結果是否與量化指標一致。}
+\label{fig:appendix_tracking_step_two_hands_visual}
+\end{figure}
+
+\begin{figure}[p]
+\ContinuedFloat
+\vspace*{-0.08\textheight}
+\centering
+\scriptsize
+\trackingrow
+    {排行老么}
+    {figures/appendix2/2_hands/youngest_step100.png}
+    {figures/appendix2/2_hands/youngest_step1000.png}
+    {刀叉}
+    {figures/appendix2/2_hands/knife_fork_step100.png}
+    {figures/appendix2/2_hands/knife_fork_step1000.png}
+\trackingrow
+    {摺}
+    {figures/appendix2/2_hands/fold_step100.png}
+    {figures/appendix2/2_hands/fold_step1000.png}
+    {臨床}
+    {figures/appendix2/2_hands/clinical_step100.png}
+    {figures/appendix2/2_hands/clinical_step1000.png}
+\trackingrow
+    {蜜蜂}
+    {figures/appendix2/2_hands/bee_step100.png}
+    {figures/appendix2/2_hands/bee_step1000.png}
+    {興奮}
+    {figures/appendix2/2_hands/excited_step100.png}
+    {figures/appendix2/2_hands/excited_step1000.png}
+\caption[]{雙手代表性詞彙於相同影格下之 100-step 與 1000-step 追蹤結果比較（續）。圖中左、中、右畫面之定義同圖~\ref{fig:appendix_tracking_step_two_hands_visual}，各色點意義如表~\ref{tab:appendix_tracking_visual_keypoint_colors} 所示。}
+\end{figure}
+
+
+\end{document}

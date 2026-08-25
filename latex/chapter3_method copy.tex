@@ -1,0 +1,550 @@
+\documentclass[class=NCU_thesis, crop=false]{standalone}
+\begin{document}
+
+\chapter{研究方法}
+
+\section{系統架構}
+\label{sec:system_architecture}
+
+本研究旨在建立一套由中文文字輸入至虛擬人手語動畫輸出的完整系統流程。不同於僅輸出手語詞彙序列或播放既有手語影片之系統，本研究進一步將手語翻譯結果與手語動作資料、動作串接處理及虛擬人渲染模組進行整合，使輸入中文句子能被轉換為連續的虛擬人手語動畫。
+整體系統流程如圖~\ref{fig:system_architecture} 所示，可分為輸入端、翻譯模組、動作生成模組與輸出端。首先，使用者輸入中文文本後，系統透過手語翻譯模組將中文句子轉換為 gloss sequence。接著，動作生成模組依據 gloss sequence 查詢已追蹤之手語動作資料，讀取各詞彙對應之動作參數與幀資料，並將多個 gloss 的動作片段進行平滑串接。最後，串接完成之動作參數會輸入至 GUAVA avatar rendering 模組，產生虛擬人手語動畫輸出。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{ch3/system_architecture.png}
+    \caption{本研究系統架構}
+    \label{fig:system_architecture}
+\end{figure}
+
+% \begin{table}[htbp]
+%     \centering
+%     \caption{中文至虛擬人手語動畫生成系統之主要模組}
+%     \label{tab:system_main_modules}
+%     \renewcommand{\arraystretch}{1.25}
+%     \setlength{\tabcolsep}{4pt}
+%     \begin{tabular}{p{0.22\textwidth}p{0.17\textwidth}p{0.30\textwidth}p{0.15\textwidth}}
+%         \toprule
+%         \textbf{模組} & \textbf{輸入} & \textbf{主要處理} & \textbf{輸出} \\
+%         \midrule
+%         手語翻譯模組 & 中文句子 & 中文至自然手語語序轉換與語意重組 & gloss sequence \\
+%         手語動作資料檢索模組 & gloss sequence & 查詢 gloss 對應之已追蹤手語動作資料 & 動作資料路徑與參數 \\
+%         動作參數平滑串接模組 & 多段 gloss 動作參數 & 動作區間擷取、片段串接與過渡平滑 & 連續動作參數序列 \\
+%         虛擬人手語動畫生成模組 & 串接後動作參數 & 以 GUAVA avatar rendering 驅動虛擬人角色 & 虛擬人手語動畫 \\
+%         \bottomrule
+%     \end{tabular}
+% \end{table}
+
+上述四個模組之功能說明如下：
+
+\begin{itemize}
+    \item \textbf{手語翻譯模組（Sign Language Translation Module）}
+
+    本模組主要負責將使用者輸入之中文敘述句轉換為符合台灣自然手語語序與表達習慣的手語詞彙序列。
+    本研究採用朱禹丞所提出之中文至自然手語翻譯模組 \cite{Chu2025SLT} 作為前端語言轉換元件，並以 gloss sequence 作為語言層級與動作層級之間的中介表示。
+    透過此模組，系統可先處理中文與自然手語之間的語序轉換與語意重組，再將轉換後的 gloss sequence 提供給後續動作資料檢索流程。
+
+    \item \textbf{手語動作資料檢索模組（Sign Motion Data Retrieval Module）}
+
+    本模組根據 SLT 模組輸出的 gloss sequence，逐一查詢各 gloss 是否具有對應之已追蹤手語動作資料。
+    本研究透過 gloss 與追蹤資料對應表，將手語詞彙對應至由 EHM-Tracker \cite{zhang2025guava} 前處理完成之動作資料目錄。
+    每一筆追蹤資料包含以 \texttt{.pkl} 格式儲存之動作參數，以及影片幀資訊與影像資料；其中動作參數包含人體姿態、手部動作與臉部表情等資訊。
+    因此，本研究並非直接由文字端到端生成影像，而是將文字至手語動畫生成問題拆分為「中文至 gloss」與「gloss 至動作」兩個較可控的階段。
+
+    \item \textbf{動作參數平滑串接模組（Motion Parameter Concatenation and Smoothing Module）}
+
+    本模組負責將多個 gloss 對應之動作參數片段依序串接為完整手語動作序列。
+    由於不同手語詞彙片段可能來自不同影片或不同時間區段，若直接逐段拼接，容易在片段交界處產生姿態跳動、速度不連續或手部位置突變等問題。
+    因此，本研究在動作生成階段加入動作參數平滑與過渡處理，針對相鄰手語片段之間的姿態參數進行連接與平滑，使多個 gloss 所對應的動作片段能形成較連續的手語動畫序列。
+
+    \item \textbf{虛擬人手語動畫生成模組（Avatar Rendering Module）}
+
+    本模組將平滑串接後的動作參數輸入至 GUAVA avatar rendering 模組 \cite{zhang2025guava}。
+    GUAVA 可根據上半身姿態、手部與表情參數驅動虛擬人角色，並產生具連續性與角色一致性的虛擬人手語動畫輸出。
+\end{itemize}
+
+此架構的主要優點在於模組化程度高。SLT 模組負責語言層級的翻譯與語序轉換，手語動作資料檢索模組負責將 gloss 對應至可用之追蹤資料，動作生成模組負責改善多段動作之間的連續性，而 GUAVA 則負責將動作參數轉換為可視覺化的虛擬人動畫。此種分階段設計有助於降低端到端文字至手語影片生成所需之資料量，也使後續錯誤分析能更清楚地區分問題來源，例如語言翻譯錯誤、詞彙資料缺失、動作追蹤失準或片段串接不自然等。
+
+\section{系統設計}
+\label{sec:system_design}
+
+上一節由功能層級說明本研究之系統架構，本節進一步由實作層級說明各模組之執行順序、資料交換方式與例外處理機制。
+本系統採模組化管線設計，以 gloss sequence 作為語言層級與動作層級之中介表示，並將手語動作資料建置與使用者動畫生成區分為兩類流程。
+前者負責將原始手語影片轉換為可重複查詢及使用的參數化動作資料；後者則從使用者輸入開始，依序完成中文至 gloss 轉換、動作資料檢索、參數串接及虛擬人渲染。
+透過此一分工，系統不需在每次接收中文句子時重新處理全部手語影片，亦可使語言轉換、動作處理與角色生成等元件分別維護與檢查。
+
+\subsection{設計目標與系統邊界}
+
+本系統之主要使用情境為：使用者選擇系統人物圖庫中的角色，或上傳一張符合追蹤條件的人物影像，接著輸入中文句子，系統便自動產生該角色演示對應手語內容之動畫。
+除最終動畫外，操作介面亦呈現 SLT 模組產生的 gloss sequence 及各 gloss 所對應之原始詞彙影片，使使用者能對照語言轉換結果、動作來源與虛擬人動畫。
+
+為支援上述使用方式，本研究之系統設計考量如下：
+
+\begin{enumerate}
+    \item \textbf{模組化}：將中文至 gloss 轉換、動作資料檢索、動作參數串接與虛擬人渲染分為獨立階段，使各模組能在維持介面一致的情況下分別調整。
+    \item \textbf{資料相容性}：詞彙層級追蹤資料與整句串接結果採用相同的資料目錄結構，使串接後資料可直接由 GUAVA 資料載入模組讀取。
+    \item \textbf{流程可檢查性}：系統保留中文輸入、gloss sequence、詞彙影片與最終動畫之對應關係，使研究者能判斷問題來自語言轉換、詞彙檢索、追蹤資料、動作串接或渲染階段。
+    \item \textbf{資料完整性}：在動作串接前檢查每個 gloss 是否具有完整追蹤資料；若必要資料不存在，系統停止後續處理並回報缺失詞彙，避免產生內容不完整的動畫。
+\end{enumerate}
+
+本研究之系統邊界始於使用者提供中文句子與角色來源，終於系統輸出 gloss sequence、詞彙參考影片及虛擬人手語動畫。
+SLT 模型、EHM-Tracker 與 GUAVA 均作為本研究整合流程中的既有技術元件；本研究主要負責建立三者之資料銜接方式，並設計 gloss 動作檢索、有效區間擷取與多片段串接流程。
+
+\subsection{手語動作資料建置流程}
+
+在使用者執行動畫生成前，系統需先建立可由 gloss 查詢的手語動作資料。
+本研究先整併不同手語資料來源中的詞彙與影片路徑，經過詞彙正規化、重複資料處理及來源選擇後，形成手語詞彙與原始影片之對應關係。
+接著，系統使用 EHM-Tracker 處理各詞彙影片，將影像中的人體姿態、手部動作與臉部資訊轉換為逐幀追蹤參數，並將結果儲存為個別的詞彙追蹤資料目錄。
+上述手語動作資料建置流程如圖~\ref{fig:sign_motion_data_construction} 所示。
+
+\begin{figure}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{c}
+        \fbox{\parbox{0.72\textwidth}{\centering
+        \textbf{原始手語詞彙影片}\\
+        整併不同手語資料來源之詞彙與影片路徑}} \\
+        $\downarrow$ \\
+        \fbox{\parbox{0.72\textwidth}{\centering
+        \textbf{EHM-Tracker}\\
+        擷取人體姿態、手部動作與臉部資訊}} \\
+        $\downarrow$ \\
+        \fbox{\parbox{0.72\textwidth}{\centering
+        \textbf{逐幀參數化追蹤資料}\\
+        EHM/SMPL-X、FLAME 與 MANO 相關參數}} \\
+        $\downarrow$ \\
+        \fbox{\parbox{0.72\textwidth}{\centering
+        \textbf{追蹤資料完整性檢查}\\
+        確認動作參數、共享參數、幀資訊與影像資料庫皆可使用}} \\
+        $\downarrow$ \\
+        \fbox{\parbox{0.72\textwidth}{\centering
+        \textbf{建立 Gloss 索引}\\
+        以 \texttt{merged\_labels\_tracked.json} 記錄詞彙與追蹤資料目錄之對應}} \\
+        $\downarrow$ \\
+        \fbox{\parbox{0.72\textwidth}{\centering
+        \textbf{詞彙動作資料庫}\\
+        提供後續動畫生成流程依 gloss 查詢及載入}} \\
+    \end{tabular}
+    \caption{本研究手語動作資料建置流程}
+    \label{fig:sign_motion_data_construction}
+\end{figure}
+
+完成追蹤後，系統建立 \texttt{merged\_labels\_tracked.json} 作為 gloss 與追蹤資料目錄之索引。
+每一筆可用資料均須包含逐幀動作參數、共享參數、影片幀資訊與影像資料庫，後續檢索模組才會將其視為有效的動作來源。
+人物圖庫中的角色影像亦會預先完成 EHM-Tracker 處理，使使用者選擇圖庫人物時可直接取得 GUAVA 所需的角色來源資料；若使用者自行上傳影像，則由系統在生成動畫前執行相同格式的單張影像追蹤流程。
+
+此資料建置流程將計算量較高的詞彙影片追蹤工作與使用者動畫生成流程分開，使同一筆詞彙動作資料可由不同中文句子及不同角色重複使用。
+當手語資料庫新增詞彙時，只需補充對應影片、完成追蹤並更新索引，不需重新訓練後端虛擬人渲染模型。
+
+\subsection{使用者動畫生成流程}
+\label{sec:system_integration_flow}
+
+使用者動畫生成流程由人物形象選擇與中文句子輸入開始。
+若使用者選擇人物圖庫中的角色，系統直接讀取該人物已建立的角色來源資料；若使用者上傳人物影像，系統先確認是否已有可重用的追蹤結果，若無則呼叫 EHM-Tracker 執行單張影像追蹤。
+完成角色來源準備後，中文句子會送入 SLT 模組，轉換為依照台灣自然手語語序排列的 gloss sequence。
+
+系統取得 gloss sequence 後，會排除標點與不需對應手部動作的特殊符號，再依序透過 \texttt{merged\_labels\_tracked.json} 查詢各 gloss 的追蹤資料目錄。
+所有詞彙資料通過完整性檢查後，系統將其依 gloss 順序送入動作參數串接模組，進行選用的詞彙層級參數平滑、motion envelope 有效區間擷取、過渡幀生成及 frame key 重建。
+串接結果使用與單一詞彙追蹤資料相同的目錄結構，並代表整句手語所對應的連續動作序列。
+
+最後，GUAVA 讀取串接後的動作資料及選定的角色來源資料，執行 cross-reenactment，逐幀產生指定角色的手語動作影像，再將全部影格合成為影片。
+系統完成處理後，操作介面同時顯示 gloss sequence、各詞彙參考影片、最終虛擬人動畫及其儲存位置。
+本研究之整體使用者動畫生成流程如圖~\ref{fig:system_integration_flow} 所示。
+
+\begin{figure}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{c}
+        \fbox{\parbox{0.78\textwidth}{\centering
+        \textbf{中文輸入與人物形象來源}\\
+        使用者輸入中文句子，並選擇圖庫人物或上傳人物影像}} \\
+        $\downarrow$ \\
+        \fbox{\parbox{0.78\textwidth}{\centering
+        \textbf{SLT 模組}\\
+        轉換為自然手語語序之 gloss sequence}} \\
+        $\downarrow$ \\
+        \fbox{\parbox{0.78\textwidth}{\centering
+        \textbf{Gloss 動作資料檢索}\\
+        透過 \texttt{merged\_labels\_tracked.json} 查詢並檢查詞彙追蹤資料}} \\
+        $\downarrow$ \\
+        \fbox{\parbox{0.78\textwidth}{\centering
+        \textbf{動作參數串接}\\
+        詞彙參數平滑、motion envelope 裁切、過渡幀生成與 frame key 重建}} \\
+        $\downarrow$ \\
+        \fbox{\parbox{0.78\textwidth}{\centering
+        \textbf{GUAVA 角色渲染}\\
+        結合串接後動作資料與角色來源資料}} \\
+        $\downarrow$ \\
+        \fbox{\parbox{0.78\textwidth}{\centering
+        \textbf{輸出結果}\\
+        gloss sequence、詞彙參考影片與虛擬人手語動畫}} \\
+    \end{tabular}
+    \caption{本研究中文至虛擬人手語動畫生成系統之整合流程}
+    \label{fig:system_integration_flow}
+\end{figure}
+
+\subsection{模組介面與資料交換格式}
+
+為使各模組能以固定方式銜接，本研究以檔案與資料目錄作為主要交換介面。
+SLT 模組將中文句子轉換為以斜線分隔的 gloss sequence；動作檢索模組再將各 gloss 轉換為詞彙追蹤資料目錄序列；串接模組則把多筆詞彙資料整理為單一連續追蹤資料目錄，最後交由 GUAVA 載入與渲染。
+各階段之主要介面整理如表~\ref{tab:system_integration_io} 所示。
+
+\begin{table}[H]
+    \centering
+    \caption{本研究系統之模組介面與資料交換格式}
+    \label{tab:system_integration_io}
+    \renewcommand{\arraystretch}{1.25}
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabular}{p{0.19\textwidth}p{0.22\textwidth}p{0.30\textwidth}p{0.19\textwidth}}
+        \toprule
+        \textbf{模組介面} & \textbf{輸入資料} & \textbf{主要處理} & \textbf{輸出資料} \\
+        \midrule
+        操作介面至 SLT & 中文句子 & 建立模型輸入並執行中文至自然手語語序轉換 & gloss sequence \\
+        操作介面至角色追蹤 & 圖庫人物或上傳影像 & 讀取既有角色資料，或執行單張影像追蹤 & 角色來源資料目錄 \\
+        SLT 至動作檢索 & 斜線分隔之 gloss sequence & 符號排除、詞彙正規化、索引查詢與資料完整性檢查 & 詞彙追蹤資料目錄序列 \\
+        動作檢索至串接模組 & 多筆詞彙追蹤資料 & 有效區間擷取、參數平滑、過渡幀生成與重新編號 & 整句連續追蹤資料目錄 \\
+        串接模組至 GUAVA & 連續追蹤資料與角色來源資料 & 角色動作驅動、逐幀渲染與影片合成 & 虛擬人手語動畫 \\
+        GUAVA 至操作介面 & 渲染完成影片 & 載入影片並呈現輸出結果 & 影片播放與儲存位置 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+詞彙追蹤資料與整句連續追蹤資料採用相同的目錄結構，主要包含下列四類資料：
+
+\begin{itemize}
+    \item \texttt{optim\_tracking\_ehm.pkl}：保存逐幀姿態與表情參數。
+    \item \texttt{id\_share\_params.pkl}：保存跨幀共用資料。
+    \item \texttt{videos\_info.json}：記錄影片識別名稱、總幀數及 frame key。
+    \item \texttt{img\_lmdb}：保存各幀所需的影像與遮罩。
+\end{itemize}
+
+串接模組在輸出時維持此資料結構，差異僅在於逐幀資料已依 gloss sequence 完成裁切、插值、串接與重新編號，因此 GUAVA 可使用相同的資料載入方式處理單一詞彙或完整句子。
+
+\subsection{例外處理設計}
+
+由於中文輸入、gloss 詞彙、追蹤資料與人物影像均可能造成流程中斷，本研究在各階段加入必要的輸入與資料檢查。
+當中文輸入為空值時，操作介面會要求使用者重新輸入，不啟動後續模型；當使用者上傳人物影像時，系統先檢查既有追蹤結果，若尚未建立才執行單張影像追蹤。
+
+在 gloss 解析階段，系統略過標點符號與特殊符號，並透過字形正規化、部分異體字轉換及人工建立的複合詞展開規則提高查詢成功率。
+經處理後的實質詞彙均須能在 \texttt{merged\_labels\_tracked.json} 中找到對應路徑，而且該路徑必須具備完整的追蹤資料檔案。
+若任一必要 gloss 無法取得可用資料，系統會列出缺失詞彙並停止串接與渲染；此設計可避免略過實質詞彙後仍產生語意不完整的動畫，也可將缺失結果作為後續擴充手語動作資料庫的依據。
+
+在動作資料通過檢查後，串接模組會為每次生成建立獨立的輸出資料夾，並在資料夾名稱重複時加入序號，避免覆寫既有結果。
+若動作片段過短、未偵測到穩定動作區間，或手部速度資料不足，系統則保守保留較完整的原始片段，使後續流程仍能取得可用的連續幀資料。
+
+\section{手語翻譯模組}
+\label{sec:slt_module}
+
+本研究採用朱禹丞所提出之中文至自然手語翻譯系統 \cite{Chu2025SLT}，作為整體系統之前端語言轉換模組。
+該系統之模型架構、訓練資料與中文語言分析流程已於第~\ref{subsubsec:chu_slt_system} 節說明。
+本研究未重新訓練或修改該翻譯模型，而是將其整合至虛擬人手語動畫生成流程。
+
+此模組的輸入為使用者輸入之中文句子，輸出為依照台灣自然手語語序排列之 gloss sequence。
+系統以斜線分隔各個 gloss，例如「弟弟/吃/番茄/不喜歡」；每一個 gloss 皆作為後續追蹤動作資料查詢、片段處理與動作串接的基本單位。
+因此，SLT 模組在本研究中負責語言層級的轉換，其輸出詞彙、語序與動作資料庫覆蓋情形，皆會直接影響後續虛擬人手語動畫生成結果。
+
+\section{手語詞彙與追蹤資料對應表}
+\label{sec:sign_vocab_tracking_mapping}
+
+本研究沿用朱禹丞論文中整理之手語詞彙與影片資料庫 \cite{Chu2025SLT}，其資料來源、原研究之詞彙條目數與原系統用途已於第~\ref{subsubsec:sign_vocab_database} 節說明。
+與原系統直接根據 gloss 播放手語示範影片不同，本研究需將詞彙影片轉換為可供虛擬人驅動的參數化動作資料。
+因此，系統先透過 EHM-Tracker 對手語詞彙影片進行前處理，再建立 gloss 與已追蹤動作資料目錄之對應關係。
+
+在建立對應表前，本研究先整併常用手語辭典、教保服務人員手語手冊，以及台灣手語線上辭典三個來源。
+整併時以正規化後的中文詞彙作為索引鍵；若相同詞彙同時存在於多個來源，且其中包含「教保服務人員手語手冊」之影片，則優先保留該影片對應。
+此優先序係依後續追蹤需求制定：EHM-Tracker 必須從影片中估計人體、雙手與臉部之逐幀參數，因此較高的影像解析度、較少的壓縮雜訊、清楚且完整的手部動作，
+以及較少的身體遮擋，均有助於提高追蹤穩定性。換言之，此規則選擇的是較適合進行動作追蹤的影像來源，而非對不同辭典的語義內容進行優劣排序。
+
+完成跨來源整併後，仍可能出現多個中文詞彙指向同一支影片的情形，例如同義詞、近義詞或不同書寫形式可共用相同手語動作。因此，索引檔的「詞彙條目數」、去除重複值後的「唯一影片路徑數」，以及來源資料夾中的「實體影片數」為三種不同統計口徑。
+現行索引與來源影片之盤點結果如表~\ref{tab:merged_tracking_index_statistics} 所示。
+
+\begin{table}[H]
+    \centering
+    \caption{本研究現行手語索引與來源影片之數量比較}
+    \label{tab:merged_tracking_index_statistics}
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{lccc}
+        \toprule
+        \textbf{資料來源} & \textbf{\shortstack{索引詞彙\\條目數}} & \textbf{\shortstack{唯一影片\\路徑數}} & \textbf{\shortstack{來源\\MP4 數}} \\
+        \midrule
+        常用手語辭典 & 6,780 & 6,768 & 7,990 \\
+        教保服務人員手語手冊 & 1,010 & 1,003 & 1,003 \\
+        台灣手語線上辭典 & 2,852 & 2,153 & 2,418 \\
+        \midrule
+        \textbf{總計} & \textbf{10,642} & \textbf{9,924} & \textbf{11,411} \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+表~\ref{tab:merged_tracking_index_statistics} 中，常用手語辭典有 1,222 支來源影片未被現行索引採用；教保資料的 1,010 個詞彙條目實際對應至 1,003 支影片；台灣手語線上辭典的 2,852 個詞彙條目則對應至 2,153 個唯一影片路徑，其中共有 699 個額外條目來自多詞共用影片。
+以「介入」、「干涉」、「打岔」、「插手」與「插嘴」為例，五個詞彙皆可指向同一個 \texttt{interfere} 動作片段。由此可知，上述數量差異的主要原因為多詞共用影片，而不能僅憑詞彙條目數與影片數不同便判定影片缺漏；實際可用性仍須另行逐筆檢查索引路徑及追蹤資料內容。
+另一方面，來源 MP4 數高於索引採用數，則表示跨來源整併與影片選擇後，來源資料夾中仍保留未被採用的原始影片。由於最終索引亦包含詞彙正規化、別名處理與跨來源覆蓋，故其條目總數不必然與整併前的標籤檔相同，應以實際供系統查詢的 \texttt{merged\_labels\_tracked.json} 為準。
+
+本研究以 \texttt{merged\_labels\_tracked.json} 作為 gloss 與追蹤資料目錄之索引檔。因此，最終系統實際使用的該 JSON 索引檔共包含 10,642 個詞彙條目。
+其資料格式可表示如下：
+
+\begin{center}
+\texttt{\{"gloss": "已追蹤資料之資料夾位置"\}}
+\end{center}
+
+因此，在動畫生成階段，系統可依據 SLT 模組輸出之 gloss sequence 查詢對應的追蹤資料目錄，作為後續動作串接與 GUAVA 渲染之輸入。
+至於手語影片如何轉換為追蹤資料，以及追蹤資料目錄中包含之檔案內容，則於下一節說明。
+
+\section{手語影片前處理}
+\label{sec:video_preprocessing_motion_extraction}
+
+為使系統能夠以參數形式驅動虛擬人角色，本研究需先對手語示範影片進行前處理，將原始影片轉換為可供 GUAVA 使用的追蹤資料。
+此階段屬於資料庫建立流程，並非每次使用者輸入句子時才即時執行。
+前處理流程主要由 EHM-Tracker 完成，其目的在於從手語影片中估計人體、手部與臉部之參數化表示，並將每一段手語詞彙轉換為可重複載入與串接的動作資料片段。
+
+在處理單一手語影片時，系統首先讀取影片幀並取得人體所在區域，接著對每一幀進行人體姿態、臉部特徵與左右手特徵擷取。
+其中，人體動作以 EHM/SMPL-X 相關參數表示，臉部表情與頭部資訊以 FLAME 相關參數表示，左右手形狀與姿態則以 MANO 相關參數表示。
+為提高追蹤結果與原始影像之間的一致性，系統亦會進行參數最佳化，使投影後的人體、手部與臉部關鍵點更貼近影片中的觀測結果。
+圖~\ref{fig:tracking_visualization_example} 為 EHM-Tracker 追蹤結果之可視化範例，可用以觀察原始手語影片、模型重建結果與疊合結果之間的一致性。
+透過此類可視化畫面，本研究可檢查追蹤後的人體姿態、雙手位置與頭部區域是否能對應至原始手語者的動作，並作為確認該詞彙片段是否適合納入後續動作資料庫的輔助依據。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{ch3/tracking_visualization_example.png}
+    \caption{EHM-Tracker 手語影片追蹤結果可視化範例。左圖為原始手語影片畫面，中圖為依據追蹤參數重建之人體模型結果，右圖為原始影像與重建模型之疊合結果，可用以觀察追蹤參數與實際手語動作之對齊程度。}
+    \label{fig:tracking_visualization_example}
+\end{figure}
+
+完成前處理後，系統會為每一個手語詞彙建立一個追蹤資料目錄，並輸出動作參數檔、共享身分參數、幀資訊與影像資料。
+每一個追蹤資料目錄主要包含以下檔案：
+
+\begin{itemize}
+    \item \texttt{optim\_tracking\_ehm.pkl}：儲存逐幀動作參數，包含人體姿態、手部動作與臉部表情等資訊。
+    \item \texttt{id\_share\_params.pkl}：儲存跨幀共用的身分與尺度資訊。
+    \item \texttt{videos\_info.json}：記錄可用幀序列與影片幀資訊。
+    \item \texttt{img\_lmdb}：保存後續渲染與資料串接所需的影像資料。
+\end{itemize}
+
+經過此流程後，原始手語影片便被轉換為可由 gloss 索引、可進行動作串接，並可輸入至 GUAVA 角色驅動流程的參數化資料。
+
+\section{Gloss 動作資料解析與例外處理}
+\label{sec:gloss_parsing_exception_handling}
+
+在取得 SLT 模組輸出之 gloss sequence 後，系統會逐一解析序列中的 gloss，並透過 gloss 與追蹤資料對應表查詢其是否具有可用的手語動作資料。
+若某一 gloss 具有對應資料，系統會載入該詞彙已由 EHM-Tracker 前處理完成之追蹤資料目錄，作為後續動作串接與 GUAVA 角色驅動生成之輸入。
+若 gloss 無法找到對應之追蹤資料，系統會回報缺失詞彙，避免後續動畫生成流程在資料不完整的情況下產生錯誤結果。
+
+此檢索流程可分為以下步驟：
+
+\begin{enumerate}
+    \item 接收 SLT 模組輸出之 gloss sequence。
+    \item 依序讀取 sequence 中的每個 gloss，並排除標點符號與特殊符號。
+    \item 透過 \texttt{merged\_labels\_tracked.json} 查詢 gloss 對應之已追蹤動作資料目錄。
+    \item 檢查該目錄是否包含 \texttt{optim\_tracking\_ehm.pkl}、\texttt{id\_share\_params.pkl}、\texttt{videos\_info.json} 與 \texttt{img\_lmdb}。
+    \item 若查找成功，將該追蹤資料目錄加入待串接序列。
+    \item 若查找失敗，記錄為 missing gloss 並停止生成流程，以利後續補充詞彙或修正對應表。
+\end{enumerate}
+
+為提高 gloss 查詢的穩定性，系統亦針對部分詞彙進行正規化與別名處理。
+例如「臺灣」與「台灣」可能對應至相同詞彙資料，因此系統會在查詢時考慮字形轉換與人工建立之別名對應。
+此外，系統也能處理部分複合詞彙展開，例如將較長的時間詞彙拆解為多個可查詢之 gloss，使其仍能透過既有動作資料產生對應動畫。
+透過上述解析與例外處理，系統能在進入動作串接之前先確認資料完整性，並降低因詞彙不一致或標點符號造成的流程中斷。
+
+\section{動作參數串接方法}
+\label{sec:motion_concatenation}
+
+在完成 gloss 對應後，系統會依照 gloss sequence 的順序載入多個手語詞彙之追蹤參數，並將這些片段串接為完整句子的動作序列。
+然而，由於各詞彙動作可能來自不同影片，其起始姿態、結束姿態、手部位置與動作速度不一定一致。
+若直接將多段追蹤參數首尾相接，容易在詞彙交界處產生手部跳動、身體姿態突變或速度不連續等問題，進而降低虛擬人手語動畫的自然度。
+
+為降低上述問題，本研究在動作串接階段加入 motion envelope 分析與過渡幀生成。
+系統會分析每段手語動作中手部關鍵點的速度變化，藉此估計該詞彙的主要動作區間。
+本研究將手部關鍵點速度隨時間形成的整體變化輪廓稱為 motion envelope，其可反映一段手語詞彙中主要動作發生的位置與持續時間。
+在實作上，系統由追蹤資料中的 DWPose keypoints 取出左右手腕位置，分別計算相鄰幀位移量後相加，作為第 $t$ 幀至第 $t+1$ 幀之手部動作強度：
+
+\begin{equation}
+    v_t =
+    \left\| \mathbf{l}_{t+1} - \mathbf{l}_{t} \right\|_2
+    +
+    \left\| \mathbf{r}_{t+1} - \mathbf{r}_{t} \right\|_2 ,
+    \label{eq:motion_envelope}
+\end{equation}
+
+其中 $\mathbf{l}_t$ 與 $\mathbf{r}_t$ 分別表示第 $t$ 幀之左手腕與右手腕二維座標，$v_t$ 表示由相鄰幀手腕位移所形成的原始手部動作強度。
+由於逐幀偵測可能含有抖動，系統會再對 $v_t$ 序列進行時間平滑，並以平滑後的 motion envelope 作為後續動作範圍判斷依據。
+本研究系統介面所呼叫之串接流程設定 \texttt{window\_size}=5，表示平滑時會參考目標幀前後約 5 幀的鄰近速度，以降低短暫偵測抖動對 motion envelope 的影響。
+
+有效動作範圍並非直接由單一峰值決定，而是以平滑後的 motion envelope 建立高、低兩個 robust 閾值。
+若速度序列具有足夠變化，系統會以中位數與 median absolute deviation（MAD）估計閾值：
+
+\begin{equation}
+    \tau_{\mathrm{high}} = \mathrm{median}(v) + 1.2 \cdot \mathrm{MAD}(v),
+    \quad
+    \tau_{\mathrm{low}} = \mathrm{median}(v) + 0.35 \cdot \mathrm{MAD}(v).
+    \label{eq:motion_envelope_threshold}
+\end{equation}
+
+當 MAD 過小而無法穩定反映速度變化時，系統改以速度分布之第 65 百分位與第 35 百分位作為高、低閾值。
+接著，系統先找出所有高於 $\tau_{\mathrm{high}}$ 的 frame interval，將連續 interval 合併為初始動作區段，再由每個區段向前與向後擴張，直到速度降至 $\tau_{\mathrm{low}}$ 以下。
+此設計類似雙閾值偵測：高閾值用於確認主要動作確實發生，低閾值則用於保留主要動作前後仍屬於同一手語詞彙的過渡動作。
+
+為避免將雜訊尖峰誤判為有效手語動作，系統會進一步過濾過短或能量過低的區段。
+具體而言，系統比較各候選區段的區段峰值與總速度能量，保留至少兩個 interval，且其峰值達最大區段峰值 25\% 以上，或總速度能量達最大區段能量 15\% 以上的區段。
+相鄰區段若間隔不超過 \texttt{min\_peak\_distance}，則會被合併為同一個動作範圍；本研究系統中 \texttt{min\_peak\_distance}=10。
+最後，系統取合併後第一個動作區段的起點與最後一個動作區段的終點作為整段詞彙動作的範圍，並以 \texttt{offset\_frames}=5 向內縮減邊界，以降低起始準備姿勢與結尾停頓被納入串接的比例。
+若片段過短，系統會以區段中心向外擴張，使保留長度至少達 18 幀或原片段長度 45\% 中較大者；若影片過短或速度變化不足，則保守保留全部幀。
+
+在此流程中，峰值偵測的主要目的不是直接決定裁切起訖點，而是輔助分析與視覺化。
+系統仍會以 \texttt{find\_peaks} 找出高於 $\tau_{\mathrm{high}}$ 且具有足夠突出程度的速度峰值，並在 motion envelope 圖上標示主要峰值，使研究者能觀察手語詞彙中動作最明顯的位置，以及檢查系統擷取區間是否涵蓋主要動作。
+因此，峰值可視為檢查 motion envelope 與有效區間是否合理的輔助資訊，而有效範圍則由上述高低閾值區段偵測流程決定。
+
+對於第一個詞彙，系統保留其開頭區間，以維持句子起始動作的完整性；對於最後一個詞彙，系統保留其結尾區間，使句尾動作能自然收束；對於中間詞彙，系統則依據 motion envelope 偵測所得之有效動作範圍裁切影片前後較靜止或與詞彙無關的片段。
+此處理可減少不同詞彙片段中不必要的等待或準備姿勢，使串接後的句子動作更緊湊。
+以輸入中文文本「 \textbf{弟弟不喜歡吃番茄}」為例，SLT 模組輸出之 gloss sequence 為「 \textbf{弟弟/吃/番茄/不喜歡}」。
+圖~\ref{fig:motion_envelope_example} 顯示此 gloss sequence 中四個詞彙片段之 motion envelope 分析結果。
+圖中藍線表示手部運動速度，綠色虛線與紅色虛線分別代表系統判定之擷取起點與終點，淡綠色區域則表示實際保留並用於後續串接的有效動作區間。
+由於「弟弟」位於句首，系統保留其起始區段；「吃」與「番茄」位於句中，因此主要依據 motion envelope 偵測之有效範圍裁切前後非必要區段；「不喜歡」位於句尾，則保留較完整的結尾區段，使整句手語能自然收束。
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{ch3/peak_analysis_didi.png}
+        \caption{弟弟}
+        \label{fig:motion_envelope_didi}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{ch3/peak_analysis_chi.png}
+        \caption{吃}
+        \label{fig:motion_envelope_chi}
+    \end{subfigure}
+
+    \vspace{0.5em}
+
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{ch3/peak_analysis_fanqie.png}
+        \caption{番茄}
+        \label{fig:motion_envelope_fanqie}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{ch3/peak_analysis_buxihuan.png}
+        \caption{不喜歡}
+        \label{fig:motion_envelope_buxihuan}
+    \end{subfigure}
+
+    \caption{「弟弟/吃/番茄/不喜歡」之 motion envelope 動作區間分析範例。四個子圖分別對應句中四個 gloss 片段；淡綠色區域為系統保留之有效動作區間，作為後續動作參數串接之輸入。}
+    \label{fig:motion_envelope_example}
+\end{figure}
+
+另一範例如輸入中文文本「 \textbf{今天在哪裡上課}」，SLT 模組輸出之 gloss sequence 為「 \textbf{今天/哪裡/上課/疑問表情}」。
+其中「疑問表情」屬於非手部語意標記，本研究目前保留其作為 SLT 輸出中的語氣提示，但後續動作資料檢索與 motion envelope 分析主要針對具有對應詞彙動作資料的「今天」、「哪裡」與「上課」三個 gloss 片段進行。
+圖~\ref{fig:motion_envelope_jintian_nali_shangke} 顯示此句中三個詞彙片段之 motion envelope 分析結果。
+由於「今天」位於句首，系統保留其起始幀，並依據 motion envelope 判定結束位置；「哪裡」位於句中，因此前後皆依據有效動作範圍裁切；「上課」位於句尾，系統依據 motion envelope 判定起始位置，並保留片段結尾，使整句動畫能自然收束。
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{ch3/peak_analysis_jintian.png}
+        \caption{今天}
+        \label{fig:motion_envelope_jintian}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{ch3/peak_analysis_nali.png}
+        \caption{哪裡}
+        \label{fig:motion_envelope_nali}
+    \end{subfigure}
+
+    \vspace{0.5em}
+
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{ch3/peak_analysis_shangke.png}
+        \caption{上課}
+        \label{fig:motion_envelope_shangke}
+    \end{subfigure}
+
+    \caption{「今天/哪裡/上課」之 motion envelope 動作區間分析範例。三個子圖分別對應句中三個 gloss 片段；綠色虛線與紅色虛線表示系統判定之擷取起點與終點，淡綠色區域表示保留並用於後續串接之有效動作區間。}
+    \label{fig:motion_envelope_jintian_nali_shangke}
+\end{figure}
+
+除有效動作區間擷取外，系統亦可對單一詞彙片段之追蹤參數進行時間平滑，以降低 EHM-Tracker 逐幀最佳化後可能產生的高頻抖動。
+此平滑處理直接作用於人體姿態、手部姿態與臉部表情等參數序列，而非作用於 motion envelope 本身。
+其目的在於保留原有動作軌跡的同時，減少相鄰影格間不自然的快速變化，作為後續詞彙層級平滑實驗之方法基礎。
+
+在相鄰兩個詞彙片段的交界處，系統會根據前一片段的最後一幀與後一片段的第一幀產生數個過渡幀。
+過渡幀透過參數插值方式生成，使身體、手部與臉部參數能由前一姿態逐步轉換至下一姿態。
+若以前一片段結束幀之參數 $\boldsymbol{\theta}^{(a)}$ 與後一片段起始幀之參數 $\boldsymbol{\theta}^{(b)}$ 表示兩端姿態，則第 $k$ 個過渡幀可表示為：
+
+\begin{equation}
+    \boldsymbol{\theta}^{(k)} =
+    (1-\alpha_k)\boldsymbol{\theta}^{(a)} +
+    \alpha_k\boldsymbol{\theta}^{(b)}, \quad
+    \alpha_k = \frac{k}{K+1}, \quad k=1,\ldots,K ,
+    \label{eq:transition_interpolation}
+\end{equation}
+
+其中 $K$ 為過渡幀數，本研究系統設定 $K=15$，亦即每兩個相鄰詞彙片段之間插入 15 個過渡幀。
+$\alpha_k$ 為第 $k$ 個過渡幀的插值權重，用來控制該幀靠近前一詞彙結尾姿態或下一詞彙起始姿態的比例；當 $k$ 較小時，$\alpha_k$ 較接近 0，過渡幀較接近前一片段結尾姿態，當 $k$ 逐漸增加時，$\alpha_k$ 逐漸接近 1，姿態便逐步靠近下一片段起始姿態。
+% 對於旋轉姿態參數，系統採用較平滑的軸角插值方式，以降低旋轉角度跨越邊界時造成的不自然跳動。
+完成所有片段與過渡幀串接後，系統會重新建立連續的 frame key，並輸出新的追蹤資料目錄，作為整句手語動畫的動作來源。
+
+整體而言，動作參數串接流程包含以下步驟：
+
+\begin{enumerate}
+    \item 依 gloss sequence 順序載入各詞彙之追蹤資料。
+    \item 分析手部運動速度，估計各詞彙之有效動作區間。
+    \item 依據詞彙位於句首、句中或句尾的位置裁切片段。
+    \item 在相鄰片段之間產生平滑過渡幀。
+    \item 重新編排 frame key，輸出整句手語對應之連續追蹤資料。
+\end{enumerate}
+
+透過上述方法，系統可將多個詞彙層級的手語動作片段整合為句子層級的連續動作序列，並減少片段交界處的突兀感。
+
+\section{GUAVA 角色驅動與動畫生成}
+\label{sec:guava_avatar_rendering}
+
+完成動作參數串接後，系統會產生新的追蹤資料目錄，其中包含整句手語對應的連續動作參數、影片幀資訊與影像資料。
+接著，GUAVA avatar rendering 模組會讀取此追蹤資料，並以指定的角色來源資料作為外觀參考，將手語動作轉移至虛擬人角色上，產生最終的手語動畫輸出。
+
+GUAVA（Generalizable Upper Body 3D Gaussian Avatar）是一種針對上半身虛擬人重建與動畫生成所設計的方法，可根據上半身姿態、手部動作與臉部表情參數驅動虛擬人角色 \cite{zhang2025guava}。
+在本研究中，GUAVA 並非作為語言翻譯模型或手語詞彙選擇模型，而是作為後端角色重演與動畫渲染模組。
+本研究並未重新訓練 GUAVA 模型，而是將前述串接完成之追蹤資料整理為 GUAVA 可讀取的資料格式，藉由既有 GUAVA avatar rendering 流程將手語動作參數轉換為虛擬人動畫輸出。
+
+本研究輸入至 GUAVA 的資料可分為動作來源與角色外觀來源兩部分。
+動作來源為 gloss sequence 對應之已追蹤手語動作資料，經由第~\ref{sec:motion_concatenation} 節所述之裁切、過渡與串接流程後，形成整句手語的連續 EHM/SMPL-X、FLAME 與手部相關參數。
+其中，EHM/SMPL-X 相關參數描述上半身姿態與整體骨架運動，FLAME 相關參數提供臉部與頭部表情資訊，手部姿態參數則用於描述手形與手指關節變化。
+角色外觀來源則來自 GUAVA 所使用之 source data，用以提供虛擬角色的外觀、身形與影像特徵。
+在本系統介面中，角色外觀可由系統提供之人物圖庫中選取，亦可由使用者自行上傳真實人物照片。
+若使用圖庫人物，系統會直接載入已由 EHM-Tracker 前處理完成之角色來源資料；若使用者上傳人物照片，系統則需先對該照片執行單張影像追蹤，將其轉換為 GUAVA 可讀取的 source data 後，才能作為後續 avatar rendering 的外觀參考。
+因此，最終輸出並非原始手語示範影片的直接拼接，而是由指定虛擬人角色依據串接後的手語動作參數重新演示整句手語。
+
+此設計使本研究能將手語動作資料與虛擬角色外觀分離。
+當 gloss sequence 與動作資料相同時，系統可更換不同的角色來源資料產生不同外觀的虛擬人；反之，當角色來源相同時，系統亦可根據不同輸入中文句子產生不同的手語動畫。
+透過此方式，本研究將語言翻譯、動作資料與角色渲染三者以模組化方式串接，使中文至虛擬人手語動畫生成流程具備較高的可擴充性。
+
+\subsection{角色來源資料追蹤}
+\label{sec:source_avatar_tracking}
+
+GUAVA 在進行角色重演時，除了需要目標動作參數外，亦需要角色來源影像及其對應之追蹤資料。
+因此，使用者選擇或上傳的人物形象並非直接作為輸出影片的貼圖使用，而是需先轉換為包含外觀與身分參數的 source data。
+本研究使用 EHM-Tracker 對角色來源影像進行前處理，以取得 GUAVA 角色驅動所需之資料。
+
+當使用者從系統圖庫選擇人物形象時，該人物已預先完成 EHM-Tracker 追蹤，系統可直接讀取其角色來源資料目錄。
+當使用者自行上傳人物照片時，系統會對上傳影像執行單張影像追蹤流程。
+此流程包含人體區域偵測、DWPose 二維關鍵點偵測、上半身 EHM/SMPL-X 參數估計、臉部 FLAME 參數估計與手部相關參數處理，並輸出與手語動作資料相同結構的追蹤資料目錄。
+實作上，角色來源資料目錄同樣包含 \texttt{optim\_tracking\_ehm.pkl}、\texttt{id\_share\_params.pkl}、\texttt{videos\_info.json} 與 \texttt{img\_lmdb} 等檔案。
+
+完成角色來源追蹤後，系統將該 source data 路徑傳入 GUAVA avatar rendering 模組，並與第~\ref{sec:motion_concatenation} 節所產生的整句手語動作資料共同作為輸入。
+此時，手語動作資料提供「如何動」，角色來源資料提供「由誰來演示」。
+因此，系統可在不重新建立手語動作資料的情況下更換虛擬角色外觀。
+需要注意的是，使用者上傳之影像需為清楚可見上半身、臉部與雙手的真實人物照片；若影像為動漫、插畫或人體區域不完整，EHM-Tracker 可能無法取得穩定追蹤結果，進而影響 GUAVA 渲染品質。
+
+\section{小結}
+
+本章說明本研究系統之整體方法，包括系統架構、系統設計、手語翻譯模組、手語詞彙與追蹤資料對應表、手語影片前處理、gloss 動作資料解析、詞彙層級參數平滑、動作參數串接與 GUAVA 角色生成。
+本研究以 gloss sequence 作為語言層級與動作層級之間的中介表示，將中文至手語動畫生成問題拆分為可控的多個階段。
+透過將文字翻譯結果轉換為可驅動虛擬角色的連續動作參數，本系統能夠由中文輸入自動產生對應之虛擬人手語動畫，作為後續實驗與系統評估之基礎。
+
+\end{document}

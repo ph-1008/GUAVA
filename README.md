@@ -2,6 +2,8 @@
   <h1 align="center">[ICCV 2025] GUAVA: Generalizable Upper Body 3D Gaussian Avatar</h1>
 <p align="center">
 
+> 本機整合專案的 NAS 備份、還原與人員交接方式，請見 [README_HANDOVER.md](README_HANDOVER.md)。
+
 <p align="center">
   <a href="https://github.com/EastbeanZhang">Dongbin Zhang</a><sup>1,2</sup>, 
   <a href="https://liuyunfei.net/">Yunfei Liu</a><sup>2†</sup>,
